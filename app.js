@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.6.0';
+const VERSION='1.6.1';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -46,7 +46,7 @@ async function askPersist(){try{if(navigator.storage&&navigator.storage.persist&
 const ui={tab:'home',ly:'',lm:undefined,st:'Unread',prio:'',q:'',open:{},size:'4x5',hideInstall:false};
 try{const s=JSON.parse(localStorage.getItem('tbr-ui')||'null');if(s)Object.assign(ui,s,{q:''});}catch(e){}
 const hsh=(location.hash||'').slice(1);if(['home','log','library'].includes(hsh))ui.tab=hsh;
-function saveUi(){try{localStorage.setItem('tbr-ui',JSON.stringify({tab:ui.tab,ly:ui.ly,lm:ui.lm,st:ui.st,prio:ui.prio,open:ui.open,size:ui.size,rg:ui.rg,split:ui.split,theme:ui.theme,hideInstall:ui.hideInstall}))}catch(e){}}
+function saveUi(){try{localStorage.setItem('tbr-ui',JSON.stringify({tab:ui.tab,ly:ui.ly,lm:ui.lm,st:ui.st,prio:ui.prio,open:ui.open,size:ui.size,rg:ui.rg,split:ui.split,theme:ui.theme,font:ui.font,hideInstall:ui.hideInstall}))}catch(e){}}
 
 const byId=id=>books.find(b=>b.id===id);
 const nextId=()=>Math.max(0,...books.map(x=>x.id))+1;
@@ -999,14 +999,21 @@ $('q').addEventListener('input',e=>{ui.q=e.target.value.trim();renderLib();});
 
 /* ---------- roundup image ---------- */
 const THEMES={
-  night:{name:'Night',bg:'#0E1117',bg2:'#161B25',grad:true,glow:'rgba(237,181,78,.22)',ink:'#F1F2F5',muted:'#9AA1AF',faint:'#5B6271',accent:'#EDB54E',empty:'#2B313E',line:'#262C38',star:'#FFA41C',df:'"Bricolage Grotesque", sans-serif',bf:'Manrope, sans-serif',shadow:'rgba(0,0,0,.55)'},
-  paper:{name:'Paper',bg:'#F3EDE2',bg2:'#E9E1D3',ink:'#1E1B16',muted:'#6E665A',faint:'#A39A8B',accent:'#B4532A',empty:'#DDD3C2',line:'#D9CFBD',star:'#E87400',df:'Fraunces, Georgia, serif',bf:'Manrope, sans-serif',shadow:'rgba(60,40,10,.28)'},
-  forest:{name:'Forest',bg:'#1E3A2F',bg2:'#24453A',ink:'#F3EBDD',muted:'#B9C4B6',faint:'#7F9488',accent:'#E2B65C',empty:'#2F5245',line:'#2F5245',star:'#FFA41C',df:'Fraunces, Georgia, serif',bf:'Manrope, sans-serif',shadow:'rgba(0,0,0,.45)'},
-  cobalt:{name:'Cobalt',bg:'#2340D0',bg2:'#2C4BDF',ink:'#FFFFFF',muted:'#C9D2FF',faint:'#93A3F5',accent:'#FFD34D',empty:'#3D57E0',line:'#3D57E0',star:'#FFA41C',df:'"Bricolage Grotesque", sans-serif',bf:'Manrope, sans-serif',shadow:'rgba(5,10,60,.45)'},
-  blush:{name:'Blush',bg:'#F4D9D0',bg2:'#EDCBC0',ink:'#3B1E1A',muted:'#7A5149',faint:'#B08A80',accent:'#A3352B',empty:'#E3BFB4',line:'#E3BFB4',star:'#E87400',df:'Fraunces, Georgia, serif',bf:'Manrope, sans-serif',shadow:'rgba(80,30,20,.25)'},
-  typewriter:{name:'Typewriter',bg:'#FAFAF7',bg2:'#F0F0EA',ink:'#111111',muted:'#5F5F5A',faint:'#A0A09A',accent:'#111111',empty:'#DCDCD5',line:'#111111',star:'#E87400',df:'"Space Mono", ui-monospace, monospace',bf:'"Space Mono", ui-monospace, monospace',shadow:'rgba(0,0,0,.18)'}
+  night:{name:'Night',bg:'#0E1117',bg2:'#161B25',grad:true,glow:'rgba(237,181,78,.22)',ink:'#F1F2F5',muted:'#9AA1AF',faint:'#5B6271',accent:'#EDB54E',empty:'#2B313E',line:'#262C38',star:'#FFA41C',shadow:'rgba(0,0,0,.55)'},
+  paper:{name:'Paper',bg:'#F3EDE2',bg2:'#E9E1D3',ink:'#1E1B16',muted:'#6E665A',faint:'#A39A8B',accent:'#B4532A',empty:'#DDD3C2',line:'#D9CFBD',star:'#E87400',shadow:'rgba(60,40,10,.28)'},
+  forest:{name:'Forest',bg:'#1E3A2F',bg2:'#24453A',ink:'#F3EBDD',muted:'#B9C4B6',faint:'#7F9488',accent:'#E2B65C',empty:'#2F5245',line:'#2F5245',star:'#FFA41C',shadow:'rgba(0,0,0,.45)'},
+  cobalt:{name:'Cobalt',bg:'#2340D0',bg2:'#2C4BDF',ink:'#FFFFFF',muted:'#C9D2FF',faint:'#93A3F5',accent:'#FFD34D',empty:'#3D57E0',line:'#3D57E0',star:'#FFA41C',shadow:'rgba(5,10,60,.45)'},
+  blush:{name:'Blush',bg:'#F4D9D0',bg2:'#EDCBC0',ink:'#3B1E1A',muted:'#7A5149',faint:'#B08A80',accent:'#A3352B',empty:'#E3BFB4',line:'#E3BFB4',star:'#E87400',shadow:'rgba(80,30,20,.25)'},
+  ink:{name:'Ink',bg:'#FAFAF7',bg2:'#F0F0EA',ink:'#111111',muted:'#5F5F5A',faint:'#A0A09A',accent:'#111111',empty:'#DCDCD5',line:'#111111',star:'#E87400',shadow:'rgba(0,0,0,.18)'}
 };
-let C=Object.assign({},THEMES.night);
+const FONTS={
+  modern:{name:'Modern',df:'"Bricolage Grotesque", sans-serif',bf:'Manrope, sans-serif'},
+  serif:{name:'Serif',df:'Fraunces, Georgia, serif',bf:'Manrope, sans-serif'},
+  elegant:{name:'Elegant',df:'"Playfair Display", Georgia, serif',bf:'"DM Sans", system-ui, sans-serif'},
+  clean:{name:'Clean',df:'"DM Sans", system-ui, sans-serif',bf:'"DM Sans", system-ui, sans-serif'},
+  typewriter:{name:'Typewriter',df:'"Space Mono", ui-monospace, monospace',bf:'"Space Mono", ui-monospace, monospace'}
+};
+let C=Object.assign({},THEMES.night,FONTS.modern);
 let lastImg=null,lastImgs=[],lastKind='month';
 function starPath(ctx,cx,cy,R){const r=R*0.47;ctx.beginPath();for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,rr=i%2?r:R;ctx.lineTo(cx+rr*Math.cos(a),cy+rr*Math.sin(a));}ctx.closePath();}
 const rateStr=r=>{const v=Math.round((+r)*100)/100;return String(v);};
@@ -1043,7 +1050,8 @@ function plan(n,W,H,minText){
   return best;
 }
 async function render(kind,y,m,size,pg){
-  C=Object.assign({},THEMES[ui.theme]||THEMES.night);
+  if(ui.theme==='typewriter'){ui.theme='ink';if(!ui.font)ui.font='typewriter';}
+  C=Object.assign({},THEMES[ui.theme]||THEMES.night,FONTS[ui.font]||FONTS.modern);
   const RG=kind==='range'?rangeInfo():null;
   const full=RG?RG.list:period(y,m);if(!full.length)return null;const list=pg?pg.list:full;
   try{await Promise.all([`800 120px ${C.df}`,`700 32px ${C.bf}`,`600 30px ${C.bf}`,`800 30px ${C.bf}`,`400 30px ${C.df}`].map(f=>document.fonts.load(f)));}catch(e){}
@@ -1143,6 +1151,7 @@ async function renderPages(kind){
   for(const [yy,mm] of months){const r=await render('month',yy,mm,ui.size,{list:period(yy,mm),no:++no,total});if(r)out.push(r);}
   return out;
 }
+document.addEventListener('click',e=>{const t=e.target.closest('[data-act="font"]');if(t){ui.font=t.dataset.v;saveUi();makeShare(lastKind);}});
 document.addEventListener('click',e=>{const t=e.target.closest('[data-act="theme"]');if(t){ui.theme=t.dataset.v;saveUi();makeShare(lastKind);}});
 document.addEventListener('click',e=>{const t=e.target.closest('[data-act="split"]');if(t){ui.split=t.dataset.v;saveUi();makeShare(lastKind);}});
 async function makeShare(kind){
@@ -1152,7 +1161,8 @@ async function makeShare(kind){
    <div class="seg">${ui.lm?`<button data-act="kind" data-k="month" aria-pressed="${kind==='month'}">Month</button>`:''}<button data-act="kind" data-k="range" aria-pressed="${kind==='range'}">Pick months</button><button data-act="kind" data-k="year" aria-pressed="${kind==='year'}">Whole year</button></div>
    ${kind==='range'?rangeControls():''}
    <div class="sizes" role="group" aria-label="Image size">${sz}</div>
-   <div class="field"><span class="lab">Style</span><div class="themes">${Object.entries(THEMES).map(([k,t])=>`<button data-act="theme" data-v="${k}" aria-pressed="${(ui.theme||'night')===k}" aria-label="${t.name}"><span class="sw" style="background:${t.bg};color:${t.ink};border-color:${t.line}"><b style="font-family:${t.df.replace(/"/g,"'")}">Aa</b><i style="background:${t.accent}"></i></span><span class="tn">${t.name}</span></button>`).join('')}</div></div>
+   <div class="field"><span class="lab">Colors</span><div class="themes">${Object.entries(THEMES).map(([k,t])=>`<button data-act="theme" data-v="${k}" aria-pressed="${(ui.theme||'night')===k}" aria-label="${t.name}"><span class="sw" style="background:${t.bg};border-color:${t.line}"><i style="background:${t.accent}"></i><em style="background:${t.ink}"></em></span><span class="tn">${t.name}</span></button>`).join('')}</div></div>
+   <div class="field"><span class="lab">Font</span><div class="fonts">${Object.entries(FONTS).map(([k,f])=>`<button data-act="font" data-v="${k}" aria-pressed="${(ui.font||'modern')===k}"><b style="font-family:${f.df.replace(/"/g,"'")}">Aa</b><span>${f.name}</span></button>`).join('')}</div></div>
    ${kind!=='month'?`<div class="field"><span class="lab">Slides</span><div class="seg">${[['one','One image'],['months','By month'],['overview','Recap + months']].map(([v,l])=>`<button data-act="split" data-v="${v}" aria-pressed="${(ui.split||'one')===v}">${l}</button>`).join('')}</div><span class="hint">Multiple slides post together as an Instagram carousel.</span></div>`:''}
    <div class="share-prev" id="sprev"><div class="emptybox">Drawing your roundup…</div></div>
    <div class="actions"><button class="btn gold" data-act="saveimg">${navigator.canShare?'Share or save':'Save image'}</button></div><span class="hint" id="smsg"></span>`);
