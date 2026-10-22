@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.4.0';
+const VERSION='1.4.1';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -1017,45 +1017,56 @@ function drawCover(ctx,b,img,x,y,w,h){
 }
 const SIZES={'1x1':[1080,1080,'Square post'],'4x5':[1080,1350,'Portrait post'],'3x4':[1080,1440,'Grid post'],'9x16':[1080,1920,'Story']};
 function plan(n,W,H,minText){
-  for(let cols=n===1?1:(n<=4?n:3);cols<=12;cols++){
-    const gap=cols<=3?40:cols<=5?26:cols<=8?16:12;const cw=Math.min(n===1?360:330,(W-gap*(cols-1))/cols);
-    const text=cw>=minText;const st=Math.max(10,Math.min(30,cw*0.13));
-    const ch=cw*1.5+cw*0.08+st+(text?cw*0.12*2.5+12:0);const rows=Math.ceil(n/cols);const tot=rows*ch+(rows-1)*gap*1.1;
-    if(tot<=H&&cw>=54)return{cols:Math.ceil(n/rows),gap,cw,text,st,ch,rows,tot};
-  }return null;
+  let best=null;
+  for(let cols=1;cols<=Math.min(n,12);cols++){
+    const rows=Math.ceil(n/cols);const gap=cols<=3?40:cols<=5?26:cols<=8?16:12;
+    const chOf=cw=>{const st=Math.max(10,Math.min(30,cw*0.13));return cw*1.5+cw*0.08+st+(cw>=minText?cw*0.12*2.5+12:0);};
+    let cw=Math.min(n===1?380:340,(W-gap*(cols-1))/cols);
+    while(cw>=54&&rows*chOf(cw)+(rows-1)*gap*1.1>H)cw-=2;
+    if(cw<54)continue;
+    if(!best||cw>best.cw+1){const st=Math.max(10,Math.min(30,cw*0.13));best={cols:Math.ceil(n/rows),gap,cw,text:cw>=minText,st,ch:chOf(cw),rows,tot:rows*chOf(cw)+(rows-1)*gap*1.1};}
+  }
+  return best;
 }
 async function render(kind,y,m,size,pg){
   const RG=kind==='range'?rangeInfo():null;
   const full=RG?RG.list:period(y,m);if(!full.length)return null;const list=pg?pg.list:full;
   try{await Promise.all(['800 120px "Bricolage Grotesque"','700 32px Manrope','600 30px Manrope','800 30px Manrope'].map(f=>document.fonts.load(f)));}catch(e){}
   const [W,H]=SIZES[size]||SIZES['4x5'];const story=size==='9x16',square=size==='1x1';
-  const P=80,top=story?250:72,bot=story?300:0,footH=square?84:96;
+  const P=80,top=story?210:72,bot=story?250:0,footH=square?84:96;
   const cv=document.createElement('canvas');cv.width=W;cv.height=H;const ctx=cv.getContext('2d');
   const bg=ctx.createLinearGradient(0,0,0,H);bg.addColorStop(0,C.bg2);bg.addColorStop(1,C.bg);ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
   const glow=ctx.createRadialGradient(W*0.85,-80,10,W*0.85,-80,W*0.9);glow.addColorStop(0,'rgba(237,181,78,.22)');glow.addColorStop(1,'rgba(237,181,78,0)');ctx.fillStyle=glow;ctx.fillRect(0,0,W,H);
   ctx.textBaseline='alphabetic';ctx.textAlign='left';
-  ctx.fillStyle=C.gold;ctx.font=`800 ${square?22:26}px Manrope, sans-serif`;
-  const kick=RG?RG.kick:(kind==='month'?'MONTHLY ROUNDUP':'YEAR IN BOOKS');let kx=P;for(const chh of kick){ctx.fillText(chh,kx,top+28);kx+=ctx.measureText(chh).width+5;}
-  if(pg&&pg.total>1){ctx.textAlign='right';ctx.fillStyle=C.muted;ctx.font=`700 ${square?22:26}px Manrope, sans-serif`;ctx.fillText(`${pg.no} / ${pg.total}`,W-P,top+28);ctx.textAlign='left';}
+  const yl=RG?RG.yl:(kind==='month'?y:'');
+  const kick=(RG?RG.kick:(kind==='month'?'MONTHLY ROUNDUP':'YEAR IN BOOKS'))+(yl?'  ·  '+yl:'');
+  const ks=square?22:26;ctx.fillStyle=C.gold;ctx.font=`800 ${ks}px Manrope, sans-serif`;let kx=P;for(const chh of kick){ctx.fillText(chh,kx,top+ks);kx+=ctx.measureText(chh).width+(chh===' '?1:5);}
+  if(pg&&pg.total>1){ctx.textAlign='right';ctx.fillStyle=C.muted;ctx.font=`700 ${ks}px Manrope, sans-serif`;ctx.fillText(`${pg.no} / ${pg.total}`,W-P,top+ks);ctx.textAlign='left';}
   const title=RG?RG.title:(kind==='month'?FULL[MI(m)]:y);
-  let fs=square?(kind==='month'?118:150):(kind==='month'?150:190);ctx.font=`800 ${fs}px "Bricolage Grotesque", sans-serif`;
-  while(ctx.measureText(title).width>W-P*2-180&&fs>70){fs-=6;ctx.font=`800 ${fs}px "Bricolage Grotesque", sans-serif`;}
-  const tb=top+28+fs*0.92;ctx.fillStyle=C.ink;ctx.fillText(title,P-6,tb);
-  const tw=ctx.measureText(title).width;
-  if(kind==='month'||RG){ctx.fillStyle=C.faint;ctx.font=`800 ${Math.round(fs*0.38)}px "Bricolage Grotesque", sans-serif`;ctx.fillText(RG?RG.yl:y,P+tw+14,tb);}
-  const av=avg(full),five=full.filter(b=>+b.r===5).length;const sy=tb+(square?58:70);const vf=square?44:54,lf=square?18:22;
-  const stats=[[String(full.length),full.length===1?'book read':'books read'],[av.toFixed(1),'average rating'],[String(five),'five-star reads']];
   const compact=!!(pg&&pg.no>1);
-  let sx=P;if(!compact)stats.forEach(([v,l],i)=>{ctx.fillStyle=C.ink;ctx.font=`800 ${vf}px "Bricolage Grotesque", sans-serif`;ctx.fillText(v,sx,sy);const vw=ctx.measureText(v).width;
-    if(i===1)drawStars(ctx,sx+vw+12,sy-vf*0.62,vf*0.48,av);
-    ctx.fillStyle=C.muted;ctx.font=`700 ${lf}px Manrope, sans-serif`;ctx.fillText(l.toUpperCase(),sx,sy+lf*1.5);sx+=Math.max(vw+(i===1?vf*3.2:0),ctx.measureText(l.toUpperCase()).width)+(square?54:70);});
-  const lineY=compact?tb+(square?26:34):sy+lf*1.5+(square?30:40);ctx.fillStyle=C.line;ctx.fillRect(P,lineY,W-P*2,2);
-  const gy0=lineY+(square?34:44),footY=H-bot-footH,gridH=footY-gy0-(square?24:34);
+  let fs=compact?(square?84:104):(square?118:(story?164:148));ctx.font=`800 ${fs}px "Bricolage Grotesque", sans-serif`;
+  while(ctx.measureText(title).width>W-P*2&&fs>60){fs-=4;ctx.font=`800 ${fs}px "Bricolage Grotesque", sans-serif`;}
+  const tb=top+ks+22+fs*0.76;ctx.fillStyle=C.ink;ctx.fillText(title,P-4,tb);
+  const av=avg(full),five=full.filter(b=>+b.r===5).length;
+  const stats=[[String(full.length),full.length===1?'book read':'books read'],[av.toFixed(1),'average rating'],[String(five),'five-star reads']];
+  let lineY;
+  if(!compact){
+    const sy=tb+fs*0.24+(square?30:42);const colW=(W-P*2)/3;const vf=square?44:(story?60:54),lf=square?16:(story?21:19);const inset=square?22:30;
+    ctx.textBaseline='top';
+    stats.forEach(([v,l],i)=>{const x=P+i*colW;if(i>0){ctx.fillStyle=C.line;ctx.fillRect(x,sy+4,2,vf+lf*1.6);}const vx=i>0?x+inset:x;
+      ctx.fillStyle=C.ink;ctx.font=`800 ${vf}px "Bricolage Grotesque", sans-serif`;ctx.fillText(v,vx,sy);const vw=ctx.measureText(v).width;
+      if(i===1)drawStars(ctx,vx+vw+12,sy+vf*0.24,vf*0.4,av);
+      ctx.fillStyle=C.muted;ctx.font=`700 ${lf}px Manrope, sans-serif`;let lx=vx;for(const chh of l.toUpperCase()){ctx.fillText(chh,lx,sy+vf*1.1);lx+=ctx.measureText(chh).width+1.5;}});
+    ctx.textBaseline='alphabetic';
+    lineY=sy+vf*1.1+lf*1.2+(square?28:40);
+  }else lineY=tb+fs*0.24+(square?22:30);
+  ctx.fillStyle=C.line;ctx.fillRect(P,lineY,W-P*2,2);
+  const gy0=lineY+(square?32:44),footY=H-bot-footH,gridH=footY-gy0-(square?24:34);
   let p=plan(list.length,W-P*2,gridH,150),shown=list,extra=0;
   if(!p){for(let k=list.length-1;k>=2;k--){p=plan(k,W-P*2,gridH,150);if(p){shown=list.slice(0,k-1);extra=list.length-shown.length;break;}}}
   if(!p)return null;
   const imgs=await Promise.all(shown.map(imgForCanvas));
-  const slots=shown.length+(extra?1:0);const gy=gy0+Math.max(0,(gridH-p.tot)/2*0.5);
+  const slots=shown.length+(extra?1:0);const gy=gy0+Math.max(0,(gridH-p.tot)*0.4);
   const pos=i=>{const r=Math.floor(i/p.cols),c=i%p.cols;const inRow=Math.min(p.cols,slots-r*p.cols);const rowW=inRow*p.cw+(inRow-1)*p.gap;return [P+(W-P*2-rowW)/2+c*(p.cw+p.gap),gy+r*(p.ch+p.gap*1.1)];};
   shown.forEach((b,i)=>{const [x,yy]=pos(i),ch=p.cw*1.5;drawCover(ctx,b,imgs[i],x,yy,p.cw,ch);
     let ty=yy+ch+p.cw*0.08;if(b.r!=='')drawStars(ctx,x,ty,p.st,+b.r);ty+=p.st+10;
