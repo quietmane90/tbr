@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.3.1';
+const VERSION='1.4.0';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -46,7 +46,7 @@ async function askPersist(){try{if(navigator.storage&&navigator.storage.persist&
 const ui={tab:'home',ly:'',lm:undefined,st:'Unread',prio:'',q:'',open:{},size:'4x5',hideInstall:false};
 try{const s=JSON.parse(localStorage.getItem('tbr-ui')||'null');if(s)Object.assign(ui,s,{q:''});}catch(e){}
 const hsh=(location.hash||'').slice(1);if(['home','log','library'].includes(hsh))ui.tab=hsh;
-function saveUi(){try{localStorage.setItem('tbr-ui',JSON.stringify({tab:ui.tab,ly:ui.ly,lm:ui.lm,st:ui.st,prio:ui.prio,open:ui.open,size:ui.size,rg:ui.rg,hideInstall:ui.hideInstall}))}catch(e){}}
+function saveUi(){try{localStorage.setItem('tbr-ui',JSON.stringify({tab:ui.tab,ly:ui.ly,lm:ui.lm,st:ui.st,prio:ui.prio,open:ui.open,size:ui.size,rg:ui.rg,per:ui.per,hideInstall:ui.hideInstall}))}catch(e){}}
 
 const byId=id=>books.find(b=>b.id===id);
 const nextId=()=>Math.max(0,...books.map(x=>x.id))+1;
@@ -994,7 +994,7 @@ $('q').addEventListener('input',e=>{ui.q=e.target.value.trim();renderLib();});
 
 /* ---------- roundup image ---------- */
 const C={bg:'#0E1117',bg2:'#161B25',ink:'#F1F2F5',muted:'#9AA1AF',faint:'#5B6271',gold:'#EDB54E',empty:'#2B313E',line:'#262C38'};
-let lastImg=null,lastKind='month';
+let lastImg=null,lastImgs=[],lastKind='month';
 function starPath(ctx,cx,cy,R){const r=R*0.47;ctx.beginPath();for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,rr=i%2?r:R;ctx.lineTo(cx+rr*Math.cos(a),cy+rr*Math.sin(a));}ctx.closePath();}
 function drawStars(ctx,x,y,size,rating){const gap=size*0.16;for(let i=0;i<5;i++){const cx=x+i*(size+gap)+size/2,cy=y+size/2,f=Math.max(0,Math.min(1,rating-i));starPath(ctx,cx,cy,size/2);ctx.fillStyle=C.empty;ctx.fill();if(f>0){ctx.save();ctx.beginPath();ctx.rect(cx-size/2,cy-size/2,size*f,size);ctx.clip();starPath(ctx,cx,cy,size/2);ctx.fillStyle=C.gold;ctx.fill();ctx.restore();}}return 5*size+4*gap;}
 function rr(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
@@ -1021,12 +1021,12 @@ function plan(n,W,H,minText){
     const gap=cols<=3?40:cols<=5?26:cols<=8?16:12;const cw=Math.min(n===1?360:330,(W-gap*(cols-1))/cols);
     const text=cw>=minText;const st=Math.max(10,Math.min(30,cw*0.13));
     const ch=cw*1.5+cw*0.08+st+(text?cw*0.12*2.5+12:0);const rows=Math.ceil(n/cols);const tot=rows*ch+(rows-1)*gap*1.1;
-    if(tot<=H&&cw>=54)return{cols,gap,cw,text,st,ch,rows,tot};
+    if(tot<=H&&cw>=54)return{cols:Math.ceil(n/rows),gap,cw,text,st,ch,rows,tot};
   }return null;
 }
-async function render(kind,y,m,size){
+async function render(kind,y,m,size,pg){
   const RG=kind==='range'?rangeInfo():null;
-  const list=RG?RG.list:period(y,m);if(!list.length)return null;
+  const full=RG?RG.list:period(y,m);if(!full.length)return null;const list=pg?pg.list:full;
   try{await Promise.all(['800 120px "Bricolage Grotesque"','700 32px Manrope','600 30px Manrope','800 30px Manrope'].map(f=>document.fonts.load(f)));}catch(e){}
   const [W,H]=SIZES[size]||SIZES['4x5'];const story=size==='9x16',square=size==='1x1';
   const P=80,top=story?250:72,bot=story?300:0,footH=square?84:96;
@@ -1036,18 +1036,20 @@ async function render(kind,y,m,size){
   ctx.textBaseline='alphabetic';ctx.textAlign='left';
   ctx.fillStyle=C.gold;ctx.font=`800 ${square?22:26}px Manrope, sans-serif`;
   const kick=RG?RG.kick:(kind==='month'?'MONTHLY ROUNDUP':'YEAR IN BOOKS');let kx=P;for(const chh of kick){ctx.fillText(chh,kx,top+28);kx+=ctx.measureText(chh).width+5;}
+  if(pg&&pg.total>1){ctx.textAlign='right';ctx.fillStyle=C.muted;ctx.font=`700 ${square?22:26}px Manrope, sans-serif`;ctx.fillText(`${pg.no} / ${pg.total}`,W-P,top+28);ctx.textAlign='left';}
   const title=RG?RG.title:(kind==='month'?FULL[MI(m)]:y);
   let fs=square?(kind==='month'?118:150):(kind==='month'?150:190);ctx.font=`800 ${fs}px "Bricolage Grotesque", sans-serif`;
   while(ctx.measureText(title).width>W-P*2-180&&fs>70){fs-=6;ctx.font=`800 ${fs}px "Bricolage Grotesque", sans-serif`;}
   const tb=top+28+fs*0.92;ctx.fillStyle=C.ink;ctx.fillText(title,P-6,tb);
   const tw=ctx.measureText(title).width;
   if(kind==='month'||RG){ctx.fillStyle=C.faint;ctx.font=`800 ${Math.round(fs*0.38)}px "Bricolage Grotesque", sans-serif`;ctx.fillText(RG?RG.yl:y,P+tw+14,tb);}
-  const av=avg(list),five=list.filter(b=>+b.r===5).length;const sy=tb+(square?58:70);const vf=square?44:54,lf=square?18:22;
-  const stats=[[String(list.length),list.length===1?'book read':'books read'],[av.toFixed(1),'average rating'],[String(five),'five-star reads']];
-  let sx=P;stats.forEach(([v,l],i)=>{ctx.fillStyle=C.ink;ctx.font=`800 ${vf}px "Bricolage Grotesque", sans-serif`;ctx.fillText(v,sx,sy);const vw=ctx.measureText(v).width;
+  const av=avg(full),five=full.filter(b=>+b.r===5).length;const sy=tb+(square?58:70);const vf=square?44:54,lf=square?18:22;
+  const stats=[[String(full.length),full.length===1?'book read':'books read'],[av.toFixed(1),'average rating'],[String(five),'five-star reads']];
+  const compact=!!(pg&&pg.no>1);
+  let sx=P;if(!compact)stats.forEach(([v,l],i)=>{ctx.fillStyle=C.ink;ctx.font=`800 ${vf}px "Bricolage Grotesque", sans-serif`;ctx.fillText(v,sx,sy);const vw=ctx.measureText(v).width;
     if(i===1)drawStars(ctx,sx+vw+12,sy-vf*0.62,vf*0.48,av);
     ctx.fillStyle=C.muted;ctx.font=`700 ${lf}px Manrope, sans-serif`;ctx.fillText(l.toUpperCase(),sx,sy+lf*1.5);sx+=Math.max(vw+(i===1?vf*3.2:0),ctx.measureText(l.toUpperCase()).width)+(square?54:70);});
-  const lineY=sy+lf*1.5+(square?30:40);ctx.fillStyle=C.line;ctx.fillRect(P,lineY,W-P*2,2);
+  const lineY=compact?tb+(square?26:34):sy+lf*1.5+(square?30:40);ctx.fillStyle=C.line;ctx.fillRect(P,lineY,W-P*2,2);
   const gy0=lineY+(square?34:44),footY=H-bot-footH,gridH=footY-gy0-(square?24:34);
   let p=plan(list.length,W-P*2,gridH,150),shown=list,extra=0;
   if(!p){for(let k=list.length-1;k>=2;k--){p=plan(k,W-P*2,gridH,150);if(p){shown=list.slice(0,k-1);extra=list.length-shown.length;break;}}}
@@ -1065,7 +1067,7 @@ async function render(kind,y,m,size){
   ctx.fillStyle=C.ink;ctx.font='800 28px "Bricolage Grotesque", sans-serif';ctx.textAlign='left';ctx.fillText(appTitle(),P,footY+56);
   ctx.fillStyle=C.muted;ctx.font='600 24px Manrope, sans-serif';ctx.textAlign='right';ctx.fillText(RG?RG.foot:(kind==='month'?`Read in ${FULL[MI(m)]} ${y}`:`Read in ${y}`),W-P,footY+56);
   let url;try{url=cv.toDataURL('image/png');}catch(e){if(noRemote)return null;return render2(kind,y,m,size);}
-  return{cv,url,name:`roundup-${RG?RG.tag:kind==='month'?`${y}-${pad2(MI(m)+1)}`:y}-${size}.png`,shown:shown.length,extra};
+  return{cv,url,name:`roundup-${RG?RG.tag:kind==='month'?`${y}-${pad2(MI(m)+1)}`:y}-${size}${pg&&pg.total>1?'-'+pg.no:''}.png`,shown:shown.length,extra};
 }
 // If a cover from another site blocks drawing, redraw with only stored covers.
 async function render2(kind,y,m,size){noRemote=true;try{return await render(kind,y,m,size);}finally{noRemote=false;}}
@@ -1099,6 +1101,16 @@ function rangeControls(){
 }
 document.addEventListener('change',e=>{const t=e.target;if(t.classList&&t.classList.contains('rg-sel')){ui.rg[t.dataset.f]=t.value;saveUi();makeShare('range');}});
 document.addEventListener('click',e=>{const t=e.target.closest('[data-act="rgq"]');if(t){rangeLast(+t.dataset.n);makeShare('range');}});
+async function renderPages(kind){
+  const y=ui.ly,m=kind==='month'?ui.lm:'';
+  const full=kind==='range'?rangeInfo().list:period(y,m);
+  const per=ui.per&&ui.per!=='all'?+ui.per:0;
+  if(!per||full.length<=per){const r=await render(kind,y,m,ui.size);return r?[r]:[];}
+  const chunks=[];for(let i=0;i<full.length&&chunks.length<20;i+=per)chunks.push(full.slice(i,i+per));
+  const out=[];for(let i=0;i<chunks.length;i++){const r=await render(kind,y,m,ui.size,{list:chunks[i],no:i+1,total:chunks.length});if(r)out.push(r);}
+  return out;
+}
+document.addEventListener('click',e=>{const t=e.target.closest('[data-act="per"]');if(t){ui.per=t.dataset.v;saveUi();makeShare(lastKind);}});
 async function makeShare(kind){
   kind=kind||(ui.lm?'month':'year');if(kind==='range')rangeInit();lastKind=kind;if(!SIZES[ui.size])ui.size='4x5';
   const sz=Object.entries(SIZES).map(([k,[w,hh,l]])=>`<button data-act="size" data-s="${k}" aria-pressed="${ui.size===k}"><span class="shape" style="width:${Math.round(22*w/hh)}px;height:22px"></span><b>${k.replace('x',':')}</b><span>${l}</span></button>`).join('');
@@ -1106,20 +1118,19 @@ async function makeShare(kind){
    <div class="seg">${ui.lm?`<button data-act="kind" data-k="month" aria-pressed="${kind==='month'}">Month</button>`:''}<button data-act="kind" data-k="range" aria-pressed="${kind==='range'}">Pick months</button><button data-act="kind" data-k="year" aria-pressed="${kind==='year'}">Whole year</button></div>
    ${kind==='range'?rangeControls():''}
    <div class="sizes" role="group" aria-label="Image size">${sz}</div>
+   <div class="field"><span class="lab">Covers per image</span><div class="seg">${[['all','All'],['4','4'],['6','6'],['9','9'],['12','12']].map(([v,l])=>`<button data-act="per" data-v="${v}" aria-pressed="${String(ui.per||'all')===v}">${l}</button>`).join('')}</div><span class="hint">Fewer covers per image makes them bigger. Extra images become an Instagram carousel (up to 20).</span></div>
    <div class="share-prev" id="sprev"><div class="emptybox">Drawing your roundup…</div></div>
    <div class="actions"><button class="btn gold" data-act="saveimg">${navigator.canShare?'Share or save':'Save image'}</button></div><span class="hint" id="smsg"></span>`);
-  const r=await render(kind,ui.ly,kind==='month'?ui.lm:'',ui.size);if(!r||!$('sprev'))return;
-  lastImg=r;$('sprev').innerHTML=`<img alt="Roundup image" src="${r.url}">`;
+  const rs=await renderPages(kind);if(!rs.length||!$('sprev'))return;const r=rs[0];
+  lastImg=r;lastImgs=rs;$('sprev').innerHTML=rs.length===1?`<img alt="Roundup image" src="${r.url}">`:`<div class="sprev-strip">${rs.map((x,i)=>`<img alt="Roundup image ${i+1} of ${rs.length}" src="${x.url}">`).join('')}</div>`;
   const [w,hh,l]=SIZES[ui.size];
-  $('smsg').textContent=`${w} × ${hh} px, Instagram ${l.toLowerCase()} size.${r.extra?` Showing ${r.shown} of ${r.shown+r.extra} books; pick a taller size to fit them all.`:''} You can also press and hold the image to save it.`;
+  $('smsg').textContent=`${w} × ${hh} px, Instagram ${l.toLowerCase()} size.${r.extra?` Showing ${r.shown} of ${r.shown+r.extra} books; pick a taller size or fewer covers per image to fit them all.`:''}${rs.length>1?` ${rs.length} images, swipe to see them all.`:''} You can also press and hold the image to save it.`;
 }
-function saveImg(){
-  if(!lastImg)return;
-  lastImg.cv.toBlob(async blob=>{
-    const file=new File([blob],lastImg.name,{type:'image/png'});
-    try{if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file]});return;}}catch(e){if(e&&e.name==='AbortError')return;}
-    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=lastImg.name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
-  },'image/png');
+async function saveImg(){
+  const list=lastImgs&&lastImgs.length?lastImgs:(lastImg?[lastImg]:[]);if(!list.length)return;
+  const files=[];for(const im of list){const blob=await new Promise(r=>im.cv.toBlob(r,'image/png'));files.push(new File([blob],im.name,{type:'image/png'}));}
+  try{if(navigator.canShare&&navigator.canShare({files})){await navigator.share({files});return;}}catch(e){if(e&&e.name==='AbortError')return;}
+  for(const f of files){const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=f.name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);await sleep(400);}
 }
 
 /* ---------- boot ---------- */
