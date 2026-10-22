@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.4.1';
+const VERSION='1.5.0';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -46,7 +46,7 @@ async function askPersist(){try{if(navigator.storage&&navigator.storage.persist&
 const ui={tab:'home',ly:'',lm:undefined,st:'Unread',prio:'',q:'',open:{},size:'4x5',hideInstall:false};
 try{const s=JSON.parse(localStorage.getItem('tbr-ui')||'null');if(s)Object.assign(ui,s,{q:''});}catch(e){}
 const hsh=(location.hash||'').slice(1);if(['home','log','library'].includes(hsh))ui.tab=hsh;
-function saveUi(){try{localStorage.setItem('tbr-ui',JSON.stringify({tab:ui.tab,ly:ui.ly,lm:ui.lm,st:ui.st,prio:ui.prio,open:ui.open,size:ui.size,rg:ui.rg,per:ui.per,hideInstall:ui.hideInstall}))}catch(e){}}
+function saveUi(){try{localStorage.setItem('tbr-ui',JSON.stringify({tab:ui.tab,ly:ui.ly,lm:ui.lm,st:ui.st,prio:ui.prio,open:ui.open,size:ui.size,rg:ui.rg,split:ui.split,hideInstall:ui.hideInstall}))}catch(e){}}
 
 const byId=id=>books.find(b=>b.id===id);
 const nextId=()=>Math.max(0,...books.map(x=>x.id))+1;
@@ -1043,7 +1043,7 @@ async function render(kind,y,m,size,pg){
   const ks=square?22:26;ctx.fillStyle=C.gold;ctx.font=`800 ${ks}px Manrope, sans-serif`;let kx=P;for(const chh of kick){ctx.fillText(chh,kx,top+ks);kx+=ctx.measureText(chh).width+(chh===' '?1:5);}
   if(pg&&pg.total>1){ctx.textAlign='right';ctx.fillStyle=C.muted;ctx.font=`700 ${ks}px Manrope, sans-serif`;ctx.fillText(`${pg.no} / ${pg.total}`,W-P,top+ks);ctx.textAlign='left';}
   const title=RG?RG.title:(kind==='month'?FULL[MI(m)]:y);
-  const compact=!!(pg&&pg.no>1);
+  const compact=!!(pg&&pg.compact);
   let fs=compact?(square?84:104):(square?118:(story?164:148));ctx.font=`800 ${fs}px "Bricolage Grotesque", sans-serif`;
   while(ctx.measureText(title).width>W-P*2&&fs>60){fs-=4;ctx.font=`800 ${fs}px "Bricolage Grotesque", sans-serif`;}
   const tb=top+ks+22+fs*0.76;ctx.fillStyle=C.ink;ctx.fillText(title,P-4,tb);
@@ -1113,15 +1113,18 @@ function rangeControls(){
 document.addEventListener('change',e=>{const t=e.target;if(t.classList&&t.classList.contains('rg-sel')){ui.rg[t.dataset.f]=t.value;saveUi();makeShare('range');}});
 document.addEventListener('click',e=>{const t=e.target.closest('[data-act="rgq"]');if(t){rangeLast(+t.dataset.n);makeShare('range');}});
 async function renderPages(kind){
-  const y=ui.ly,m=kind==='month'?ui.lm:'';
-  const full=kind==='range'?rangeInfo().list:period(y,m);
-  const per=ui.per&&ui.per!=='all'?+ui.per:0;
-  if(!per||full.length<=per){const r=await render(kind,y,m,ui.size);return r?[r]:[];}
-  const chunks=[];for(let i=0;i<full.length&&chunks.length<20;i+=per)chunks.push(full.slice(i,i+per));
-  const out=[];for(let i=0;i<chunks.length;i++){const r=await render(kind,y,m,ui.size,{list:chunks[i],no:i+1,total:chunks.length});if(r)out.push(r);}
+  const y=ui.ly,m=kind==='month'?ui.lm:'';const split=kind==='month'?'one':(ui.split||'one');
+  if(split==='one'){const r=await render(kind,y,m,ui.size);return r?[r]:[];}
+  let months=[];
+  if(kind==='range'){const R=rangeInfo();const seen=new Set();for(const b of R.list){const k=b.y+'|'+b.m;if(!seen.has(k)){seen.add(k);months.push([b.y,b.m]);}}}
+  else{for(const mm of MONTHS)if(period(y,mm).length)months.push([y,mm]);}
+  months=months.slice(0,split==='overview'?19:20);
+  const total=months.length+(split==='overview'?1:0);const out=[];let no=0;
+  if(split==='overview'){const r=await render(kind,y,m,ui.size,{list:kind==='range'?rangeInfo().list:period(y,''),no:++no,total});if(r)out.push(r);}
+  for(const [yy,mm] of months){const r=await render('month',yy,mm,ui.size,{list:period(yy,mm),no:++no,total});if(r)out.push(r);}
   return out;
 }
-document.addEventListener('click',e=>{const t=e.target.closest('[data-act="per"]');if(t){ui.per=t.dataset.v;saveUi();makeShare(lastKind);}});
+document.addEventListener('click',e=>{const t=e.target.closest('[data-act="split"]');if(t){ui.split=t.dataset.v;saveUi();makeShare(lastKind);}});
 async function makeShare(kind){
   kind=kind||(ui.lm?'month':'year');if(kind==='range')rangeInit();lastKind=kind;if(!SIZES[ui.size])ui.size='4x5';
   const sz=Object.entries(SIZES).map(([k,[w,hh,l]])=>`<button data-act="size" data-s="${k}" aria-pressed="${ui.size===k}"><span class="shape" style="width:${Math.round(22*w/hh)}px;height:22px"></span><b>${k.replace('x',':')}</b><span>${l}</span></button>`).join('');
@@ -1129,13 +1132,13 @@ async function makeShare(kind){
    <div class="seg">${ui.lm?`<button data-act="kind" data-k="month" aria-pressed="${kind==='month'}">Month</button>`:''}<button data-act="kind" data-k="range" aria-pressed="${kind==='range'}">Pick months</button><button data-act="kind" data-k="year" aria-pressed="${kind==='year'}">Whole year</button></div>
    ${kind==='range'?rangeControls():''}
    <div class="sizes" role="group" aria-label="Image size">${sz}</div>
-   <div class="field"><span class="lab">Covers per image</span><div class="seg">${[['all','All'],['4','4'],['6','6'],['9','9'],['12','12']].map(([v,l])=>`<button data-act="per" data-v="${v}" aria-pressed="${String(ui.per||'all')===v}">${l}</button>`).join('')}</div><span class="hint">Fewer covers per image makes them bigger. Extra images become an Instagram carousel (up to 20).</span></div>
+   ${kind!=='month'?`<div class="field"><span class="lab">Slides</span><div class="seg">${[['one','One image'],['months','A slide per month'],['overview','Overview + months']].map(([v,l])=>`<button data-act="split" data-v="${v}" aria-pressed="${(ui.split||'one')===v}">${l}</button>`).join('')}</div><span class="hint">Multiple slides post together as an Instagram carousel.</span></div>`:''}
    <div class="share-prev" id="sprev"><div class="emptybox">Drawing your roundup…</div></div>
    <div class="actions"><button class="btn gold" data-act="saveimg">${navigator.canShare?'Share or save':'Save image'}</button></div><span class="hint" id="smsg"></span>`);
   const rs=await renderPages(kind);if(!rs.length||!$('sprev'))return;const r=rs[0];
   lastImg=r;lastImgs=rs;$('sprev').innerHTML=rs.length===1?`<img alt="Roundup image" src="${r.url}">`:`<div class="sprev-strip">${rs.map((x,i)=>`<img alt="Roundup image ${i+1} of ${rs.length}" src="${x.url}">`).join('')}</div>`;
   const [w,hh,l]=SIZES[ui.size];
-  $('smsg').textContent=`${w} × ${hh} px, Instagram ${l.toLowerCase()} size.${r.extra?` Showing ${r.shown} of ${r.shown+r.extra} books; pick a taller size or fewer covers per image to fit them all.`:''}${rs.length>1?` ${rs.length} images, swipe to see them all.`:''} You can also press and hold the image to save it.`;
+  $('smsg').textContent=`${w} × ${hh} px, Instagram ${l.toLowerCase()} size.${r.extra?` Showing ${r.shown} of ${r.shown+r.extra} books; pick a taller size or a slide per month to fit them all.`:''}${rs.length>1?` ${rs.length} images, swipe to see them all.`:''} You can also press and hold the image to save it.`;
 }
 async function saveImg(){
   const list=lastImgs&&lastImgs.length?lastImgs:(lastImg?[lastImg]:[]);if(!list.length)return;
