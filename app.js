@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.6.1';
+const VERSION='1.6.2';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -1019,7 +1019,8 @@ function starPath(ctx,cx,cy,R){const r=R*0.47;ctx.beginPath();for(let i=0;i<10;i
 const rateStr=r=>{const v=Math.round((+r)*100)/100;return String(v);};
 function drawStars(ctx,x,y,size,rating){const gap=size*0.16;for(let i=0;i<5;i++){const cx=x+i*(size+gap)+size/2,cy=y+size/2,f=Math.max(0,Math.min(1,rating-i));starPath(ctx,cx,cy,size/2);ctx.fillStyle=C.empty;ctx.fill();if(f>0){ctx.save();ctx.beginPath();ctx.rect(cx-size/2,cy-size/2,size*f,size);ctx.clip();starPath(ctx,cx,cy,size/2);ctx.fillStyle=C.star;ctx.fill();ctx.restore();}}return 5*size+4*gap;}
 function rr(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
-function wrap(ctx,text,maxW,maxL){const ws=String(text).split(/\s+/),ls=[];let cur='';for(const w of ws){const t=cur?cur+' '+w:w;if(ctx.measureText(t).width<=maxW||!cur)cur=t;else{ls.push(cur);cur=w;}}if(cur)ls.push(cur);if(ls.length>maxL){ls.length=maxL;let l=ls[maxL-1];while(ctx.measureText(l+'…').width>maxW&&l.length>1)l=l.slice(0,-1);ls[maxL-1]=l.trimEnd()+'…';}return ls;}
+function wrapG(ctx,ws,maxW){const ls=[];let cur='';for(const w of ws){const t=cur?cur+' '+w:w;if(ctx.measureText(t).width<=maxW||!cur)cur=t;else{ls.push(cur);cur=w;}}if(cur)ls.push(cur);return ls;}
+function wrap(ctx,text,maxW,maxL){const ws=String(text).trim().split(/\s+/);let ls=wrapG(ctx,ws,maxW);if(ls.length>1&&ls.length<=maxL){const n=ls.length;let lo=Math.max(...ws.map(w=>ctx.measureText(w).width)),hi=maxW;for(let k=0;k<14&&hi-lo>0.5;k++){const mid=(lo+hi)/2;if(wrapG(ctx,ws,mid).length<=n)hi=mid;else lo=mid;}ls=wrapG(ctx,ws,hi);}if(ls.length>maxL){ls.length=maxL;let l=ls[maxL-1];while(ctx.measureText(l+'…').width>maxW&&l.length>1)l=l.slice(0,-1);ls[maxL-1]=l.trimEnd()+'…';}return ls;}
 function loadImg(src,cors){return new Promise(res=>{const i=new Image();if(cors)i.crossOrigin='anonymous';i.referrerPolicy='no-referrer';i.onload=()=>res(i);i.onerror=()=>res(null);i.src=src;});}
 let noRemote=false;
 async function imgForCanvas(b){const s=srcFor(b);if(!s)return null;if(b.c==='idb')return loadImg(s,false);if(noRemote)return null;return loadImg(s,true);}
@@ -1037,6 +1038,7 @@ function drawCover(ctx,b,img,x,y,w,h){
   ctx.restore();ctx.save();rr(ctx,x,y,w,h,rad);ctx.strokeStyle='rgba(255,255,255,.08)';ctx.lineWidth=1.5;ctx.stroke();ctx.restore();
 }
 const SIZES={'1x1':[1080,1080,'Square post'],'4x5':[1080,1350,'Portrait post'],'3x4':[1080,1440,'Grid post'],'9x16':[1080,1920,'Story']};
+function fm(ctx,font,sample){ctx.font=font;const m=ctx.measureText(sample);return {a:m.actualBoundingBoxAscent,d:m.actualBoundingBoxDescent};}
 function plan(n,W,H,minText){
   let best=null;
   for(let cols=1;cols<=Math.min(n,12);cols++){
@@ -1063,26 +1065,29 @@ async function render(kind,y,m,size,pg){
   ctx.textBaseline='alphabetic';ctx.textAlign='left';
   const yl=RG?RG.yl:(kind==='month'?y:'');
   const kick=(RG?RG.kick:(kind==='month'?'MONTHLY ROUNDUP':'YEAR IN BOOKS'))+(yl?'  ·  '+yl:'');
-  const ks=square?22:26;ctx.fillStyle=C.accent;ctx.font=`800 ${ks}px ${C.bf}`;let kx=P;for(const chh of kick){ctx.fillText(chh,kx,top+ks);kx+=ctx.measureText(chh).width+(chh===' '?1:5);}
+  const ks=square?22:26;let kfs=ks;const pgw=(pg&&pg.total>1)?(ctx.font=`700 ${ks}px ${C.bf}`,ctx.measureText(`${pg.no} / ${pg.total}`).width+28):0;const trk=ch=>ch===' '?1:5;for(;kfs>14;kfs--){ctx.font=`800 ${kfs}px ${C.bf}`;let tw=0;for(const chh of kick)tw+=ctx.measureText(chh).width+trk(chh);if(tw<=W-P*2-pgw)break;}ctx.fillStyle=C.accent;ctx.font=`800 ${kfs}px ${C.bf}`;let kx=P;for(const chh of kick){ctx.fillText(chh,kx,top+ks);kx+=ctx.measureText(chh).width+(chh===' '?1:5);}
   if(pg&&pg.total>1){ctx.textAlign='right';ctx.fillStyle=C.muted;ctx.font=`700 ${ks}px ${C.bf}`;ctx.fillText(`${pg.no} / ${pg.total}`,W-P,top+ks);ctx.textAlign='left';}
   const title=RG?RG.title:(kind==='month'?FULL[MI(m)]:y);
   const compact=!!(pg&&pg.compact);
   let fs=compact?(square?84:104):(square?118:(story?164:148));ctx.font=`800 ${fs}px ${C.df}`;
   while(ctx.measureText(title).width>W-P*2&&fs>60){fs-=4;ctx.font=`800 ${fs}px ${C.df}`;}
-  const tb=top+ks+22+fs*0.76;ctx.fillStyle=C.ink;ctx.fillText(title,P-4,tb);
+  const TM=fm(ctx,`800 ${fs}px ${C.df}`,'HdlJ0123456789'),TD=fm(ctx,`800 ${fs}px ${C.df}`,'gjpqy').d;ctx.font=`800 ${fs}px ${C.df}`;const tb=top+ks+26+TM.a;ctx.fillStyle=C.ink;ctx.fillText(title,P-4,tb);
   const av=avg(full),five=full.filter(b=>+b.r===5).length;
   const stats=[[String(full.length),full.length===1?'book read':'books read'],[av.toFixed(1),'average rating'],[String(five),'five-star reads']];
   let lineY;
   if(!compact){
-    const sy=tb+fs*0.24+(square?30:42);const colW=(W-P*2)/3;const vf=square?44:(story?60:54),lf=square?16:(story?21:19);const inset=square?22:30;
-    ctx.textBaseline='top';
-    stats.forEach(([v,l],i)=>{const x=P+i*colW;if(i>0){ctx.fillStyle=C.line;ctx.fillRect(x,sy+4,2,vf+lf*1.6);}const vx=i>0?x+inset:x;
-      ctx.fillStyle=C.ink;ctx.font=`800 ${vf}px ${C.df}`;ctx.fillText(v,vx,sy);const vw=ctx.measureText(v).width;
-      if(i===1)drawStars(ctx,vx+vw+12,sy+vf*0.24,vf*0.4,av);
-      ctx.fillStyle=C.muted;ctx.font=`700 ${lf}px ${C.bf}`;let lx=vx;for(const chh of l.toUpperCase()){ctx.fillText(chh,lx,sy+vf*1.1);lx+=ctx.measureText(chh).width+1.5;}});
+    const sy=tb+TD+(square?34:46);const colW=(W-P*2)/3;const vf0=square?44:(story?60:54),lf0=square?16:(story?21:19);const inset=square?22:30;
+    const capT=vf0*0.72;const nfam=(fm(ctx,`800 60px ${C.df}`,'2').a<fm(ctx,`800 60px ${C.df}`,'H').a*0.82)?C.bf:C.df;let vf=vf0,NM=fm(ctx,`800 ${vf}px ${nfam}`,'0123456789');vf=Math.max(vf0*0.8,Math.min(vf0*1.5,vf0*capT/Math.max(1,NM.a)));NM=fm(ctx,`800 ${vf}px ${nfam}`,'0123456789.');
+    const base=sy+NM.a;
+    let lf=lf0;const lab=ls=>{ctx.font=`700 ${lf}px ${C.bf}`;let w=0;for(const chh of ls.toUpperCase())w+=ctx.measureText(chh).width+1.5;return w;};while(lf>11&&stats.some(([v,l],i)=>lab(l)>colW-(i>0?inset:0)-14))lf--;
+    const LM=fm(ctx,`700 ${lf}px ${C.bf}`,'ABCDEFHIKR');const lb=base+Math.max(NM.d,0)+Math.round(lf*0.85)+LM.a;
     ctx.textBaseline='alphabetic';
-    lineY=sy+vf*1.1+lf*1.2+(square?28:40);
-  }else lineY=tb+fs*0.24+(square?22:30);
+    stats.forEach(([v,l],i)=>{const x=P+i*colW;if(i>0){ctx.fillStyle=C.line;ctx.fillRect(x,sy-2,2,lb-sy+8);}const vx=i>0?x+inset:x;
+      ctx.fillStyle=C.ink;ctx.font=`800 ${vf}px ${nfam}`;ctx.fillText(v,vx,base);const vw=ctx.measureText(v).width;
+      if(i===1){let ss=vf0*0.4;const room=x+colW-14-(vx+vw+14);while(ss>10&&5*ss+4*ss*0.16>room)ss-=1;drawStars(ctx,vx+vw+14,base-NM.a/2-ss/2,ss,av);}
+      ctx.fillStyle=C.muted;ctx.font=`700 ${lf}px ${C.bf}`;let lx=vx;for(const chh of l.toUpperCase()){ctx.fillText(chh,lx,lb);lx+=ctx.measureText(chh).width+1.5;}});
+    lineY=lb+(square?30:42);
+  }else lineY=tb+TD+(square?24:32);
   ctx.fillStyle=C.line;ctx.fillRect(P,lineY,W-P*2,2);
   const gy0=lineY+(square?32:44),footY=H-bot-footH,gridH=footY-gy0-(square?24:34);
   let p=plan(list.length,W-P*2,gridH,150),shown=list,extra=0;
