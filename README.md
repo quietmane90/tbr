@@ -5,7 +5,7 @@ A free reading tracker that installs to your home screen like an app. It tracks 
 ## Features
 - **Reading:** what you're reading now, an Up next queue you can drag to reorder, and stats for the year.
 - **Log:** filter by year and month, and drag books into the order you read them.
-- **Roundups:** monthly or yearly images with covers and star ratings, in 1:1, 4:5, 3:4 and 9:16.
+- **Roundups:** monthly, multi-month (any range you pick) or yearly images with covers and star ratings, in 1:1, 4:5, 3:4 and 9:16.
 - **Library:** books grouped by series, sorted by priority, with standalones shown on their own.
 - **Quick add:** type a title and author, scan a cover photo, or add a whole series at once. Pick a priority and the rest is filled in.
 - **Covers:** found automatically from Open Library, Apple Books and Google Books. You can also use your own photo.

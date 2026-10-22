@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.3.0';
+const VERSION='1.3.1';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -46,7 +46,7 @@ async function askPersist(){try{if(navigator.storage&&navigator.storage.persist&
 const ui={tab:'home',ly:'',lm:undefined,st:'Unread',prio:'',q:'',open:{},size:'4x5',hideInstall:false};
 try{const s=JSON.parse(localStorage.getItem('tbr-ui')||'null');if(s)Object.assign(ui,s,{q:''});}catch(e){}
 const hsh=(location.hash||'').slice(1);if(['home','log','library'].includes(hsh))ui.tab=hsh;
-function saveUi(){try{localStorage.setItem('tbr-ui',JSON.stringify({tab:ui.tab,ly:ui.ly,lm:ui.lm,st:ui.st,prio:ui.prio,open:ui.open,size:ui.size,hideInstall:ui.hideInstall}))}catch(e){}}
+function saveUi(){try{localStorage.setItem('tbr-ui',JSON.stringify({tab:ui.tab,ly:ui.ly,lm:ui.lm,st:ui.st,prio:ui.prio,open:ui.open,size:ui.size,rg:ui.rg,hideInstall:ui.hideInstall}))}catch(e){}}
 
 const byId=id=>books.find(b=>b.id===id);
 const nextId=()=>Math.max(0,...books.map(x=>x.id))+1;
@@ -1025,7 +1025,8 @@ function plan(n,W,H,minText){
   }return null;
 }
 async function render(kind,y,m,size){
-  const list=period(y,m);if(!list.length)return null;
+  const RG=kind==='range'?rangeInfo():null;
+  const list=RG?RG.list:period(y,m);if(!list.length)return null;
   try{await Promise.all(['800 120px "Bricolage Grotesque"','700 32px Manrope','600 30px Manrope','800 30px Manrope'].map(f=>document.fonts.load(f)));}catch(e){}
   const [W,H]=SIZES[size]||SIZES['4x5'];const story=size==='9x16',square=size==='1x1';
   const P=80,top=story?250:72,bot=story?300:0,footH=square?84:96;
@@ -1034,13 +1035,13 @@ async function render(kind,y,m,size){
   const glow=ctx.createRadialGradient(W*0.85,-80,10,W*0.85,-80,W*0.9);glow.addColorStop(0,'rgba(237,181,78,.22)');glow.addColorStop(1,'rgba(237,181,78,0)');ctx.fillStyle=glow;ctx.fillRect(0,0,W,H);
   ctx.textBaseline='alphabetic';ctx.textAlign='left';
   ctx.fillStyle=C.gold;ctx.font=`800 ${square?22:26}px Manrope, sans-serif`;
-  const kick=(kind==='month'?'MONTHLY ROUNDUP':'YEAR IN BOOKS');let kx=P;for(const chh of kick){ctx.fillText(chh,kx,top+28);kx+=ctx.measureText(chh).width+5;}
-  const title=kind==='month'?FULL[MI(m)]:y;
+  const kick=RG?RG.kick:(kind==='month'?'MONTHLY ROUNDUP':'YEAR IN BOOKS');let kx=P;for(const chh of kick){ctx.fillText(chh,kx,top+28);kx+=ctx.measureText(chh).width+5;}
+  const title=RG?RG.title:(kind==='month'?FULL[MI(m)]:y);
   let fs=square?(kind==='month'?118:150):(kind==='month'?150:190);ctx.font=`800 ${fs}px "Bricolage Grotesque", sans-serif`;
   while(ctx.measureText(title).width>W-P*2-180&&fs>70){fs-=6;ctx.font=`800 ${fs}px "Bricolage Grotesque", sans-serif`;}
   const tb=top+28+fs*0.92;ctx.fillStyle=C.ink;ctx.fillText(title,P-6,tb);
   const tw=ctx.measureText(title).width;
-  if(kind==='month'){ctx.fillStyle=C.faint;ctx.font=`800 ${Math.round(fs*0.38)}px "Bricolage Grotesque", sans-serif`;ctx.fillText(y,P+tw+14,tb);}
+  if(kind==='month'||RG){ctx.fillStyle=C.faint;ctx.font=`800 ${Math.round(fs*0.38)}px "Bricolage Grotesque", sans-serif`;ctx.fillText(RG?RG.yl:y,P+tw+14,tb);}
   const av=avg(list),five=list.filter(b=>+b.r===5).length;const sy=tb+(square?58:70);const vf=square?44:54,lf=square?18:22;
   const stats=[[String(list.length),list.length===1?'book read':'books read'],[av.toFixed(1),'average rating'],[String(five),'five-star reads']];
   let sx=P;stats.forEach(([v,l],i)=>{ctx.fillStyle=C.ink;ctx.font=`800 ${vf}px "Bricolage Grotesque", sans-serif`;ctx.fillText(v,sx,sy);const vw=ctx.measureText(v).width;
@@ -1062,17 +1063,48 @@ async function render(kind,y,m,size){
     ctx.fillStyle=C.muted;ctx.font=`700 ${Math.round(p.cw*0.11)}px Manrope, sans-serif`;ctx.fillText('more',x+p.cw/2,yy+ch/2+p.cw*0.24);ctx.textAlign='left';}
   ctx.fillStyle=C.line;ctx.fillRect(P,footY,W-P*2,2);
   ctx.fillStyle=C.ink;ctx.font='800 28px "Bricolage Grotesque", sans-serif';ctx.textAlign='left';ctx.fillText(appTitle(),P,footY+56);
-  ctx.fillStyle=C.muted;ctx.font='600 24px Manrope, sans-serif';ctx.textAlign='right';ctx.fillText(kind==='month'?`Read in ${FULL[MI(m)]} ${y}`:`Read in ${y}`,W-P,footY+56);
+  ctx.fillStyle=C.muted;ctx.font='600 24px Manrope, sans-serif';ctx.textAlign='right';ctx.fillText(RG?RG.foot:(kind==='month'?`Read in ${FULL[MI(m)]} ${y}`:`Read in ${y}`),W-P,footY+56);
   let url;try{url=cv.toDataURL('image/png');}catch(e){if(noRemote)return null;return render2(kind,y,m,size);}
-  return{cv,url,name:`roundup-${kind==='month'?`${y}-${pad2(MI(m)+1)}`:y}-${size}.png`,shown:shown.length,extra};
+  return{cv,url,name:`roundup-${RG?RG.tag:kind==='month'?`${y}-${pad2(MI(m)+1)}`:y}-${size}.png`,shown:shown.length,extra};
 }
 // If a cover from another site blocks drawing, redraw with only stored covers.
 async function render2(kind,y,m,size){noRemote=true;try{return await render(kind,y,m,size);}finally{noRemote=false;}}
+function rangeKey(y,m){return (+y)*12+MI(m);}
+function rangeInit(){
+  if(ui.rg&&ui.rg.y1)return;
+  const end=ui.lm?{y:ui.ly,m:ui.lm}:(()=>{const yb=period(ui.ly||THISYEAR,'');const ms=yb.map(b=>MI(b.m)).filter(i=>i>=0);return{y:ui.ly||THISYEAR,m:MONTHS[ms.length?Math.max(...ms):NOW.getMonth()]};})();
+  rangeLast(3,end);
+}
+function rangeLast(n,end){
+  if(!end){const all=readBooks().filter(b=>MI(b.m)>=0);const k=all.length?Math.max(...all.map(b=>rangeKey(b.y,b.m))):rangeKey(THISYEAR,MONTHS[NOW.getMonth()]);end={y:String(Math.floor(k/12)),m:MONTHS[k%12]};}
+  const k2=rangeKey(end.y,end.m),k1=k2-(n-1);
+  ui.rg={y1:String(Math.floor(k1/12)),m1:MONTHS[((k1%12)+12)%12],y2:String(end.y),m2:end.m};saveUi();
+}
+function rangeInfo(){
+  const r=ui.rg||{};let k1=rangeKey(r.y1,r.m1),k2=rangeKey(r.y2,r.m2);if(k1>k2)[k1,k2]=[k2,k1];
+  const y1=String(Math.floor(k1/12)),m1=MONTHS[k1%12],y2=String(Math.floor(k2/12)),m2=MONTHS[k2%12];const n=k2-k1+1;
+  const years=[];for(let y=+y1;y<=+y2;y++)years.push(String(y));
+  const list=[].concat(...years.map(y=>period(y,''))).filter(b=>{const k=rangeKey(b.y,b.m);return k>=k1&&k<=k2;});
+  const same=y1===y2;
+  return{list,n,title:n===1?FULL[MI(m1)]:`${m1} to ${m2}`,yl:same?y1:`${y1} to ${y2}`,kick:n===1?'MONTHLY ROUNDUP':`${n}-MONTH ROUNDUP`,
+    foot:n===1?`Read in ${FULL[MI(m1)]} ${y1}`:`Read ${m1}${same?'':' '+y1} to ${m2} ${y2}`,head:n===1?`${FULL[MI(m1)]} ${y1}`:`${m1}${same?'':' '+y1} to ${m2} ${y2}`,tag:`${y1}-${String(MI(m1)+1).padStart(2,'0')}-to-${y2}-${String(MI(m2)+1).padStart(2,'0')}`};
+}
+function rangeControls(){
+  const r=ui.rg;const years=[...new Set([...readBooks().map(b=>b.y),THISYEAR])].sort();
+  const sel=(f,opts,v)=>`<select class="inp rg-sel" data-f="${f}">${opts.map(([val,l])=>`<option value="${val}"${String(v)===String(val)?' selected':''}>${l}</option>`).join('')}</select>`;
+  const M=MONTHS.map(m=>[m,m]),Y=years.map(y=>[y,y]);
+  return `<div class="pills">${[2,3,6,9].map(n=>`<button class="pill" data-act="rgq" data-n="${n}">Last ${n} months</button>`).join('')}</div>
+  <div class="row2"><div class="field"><span class="lab">From</span><div class="row2">${sel('m1',M,r.m1)}${sel('y1',Y,r.y1)}</div></div><div class="field"><span class="lab">To</span><div class="row2">${sel('m2',M,r.m2)}${sel('y2',Y,r.y2)}</div></div></div>
+  <span class="hint">${rangeInfo().list.length} books in this range.</span>`;
+}
+document.addEventListener('change',e=>{const t=e.target;if(t.classList&&t.classList.contains('rg-sel')){ui.rg[t.dataset.f]=t.value;saveUi();makeShare('range');}});
+document.addEventListener('click',e=>{const t=e.target.closest('[data-act="rgq"]');if(t){rangeLast(+t.dataset.n);makeShare('range');}});
 async function makeShare(kind){
-  kind=kind||(ui.lm?'month':'year');lastKind=kind;if(!SIZES[ui.size])ui.size='4x5';
+  kind=kind||(ui.lm?'month':'year');if(kind==='range')rangeInit();lastKind=kind;if(!SIZES[ui.size])ui.size='4x5';
   const sz=Object.entries(SIZES).map(([k,[w,hh,l]])=>`<button data-act="size" data-s="${k}" aria-pressed="${ui.size===k}"><span class="shape" style="width:${Math.round(22*w/hh)}px;height:22px"></span><b>${k.replace('x',':')}</b><span>${l}</span></button>`).join('');
-  openSheet(`<div class="sh-head" style="grid-template-columns:1fr auto"><div style="display:grid;gap:4px"><span class="kicker">Share</span><h3>${kind==='month'?`${FULL[MI(ui.lm)]} ${ui.ly}`:ui.ly} roundup</h3></div>${X}</div>
-   ${ui.lm?`<div class="seg"><button data-act="kind" data-k="month" aria-pressed="${kind==='month'}">Month</button><button data-act="kind" data-k="year" aria-pressed="${kind==='year'}">Whole year</button></div>`:''}
+  openSheet(`<div class="sh-head" style="grid-template-columns:1fr auto"><div style="display:grid;gap:4px"><span class="kicker">Share</span><h3>${kind==='range'?rangeInfo().head:kind==='month'?`${FULL[MI(ui.lm)]} ${ui.ly}`:ui.ly} roundup</h3></div>${X}</div>
+   <div class="seg">${ui.lm?`<button data-act="kind" data-k="month" aria-pressed="${kind==='month'}">Month</button>`:''}<button data-act="kind" data-k="range" aria-pressed="${kind==='range'}">Pick months</button><button data-act="kind" data-k="year" aria-pressed="${kind==='year'}">Whole year</button></div>
+   ${kind==='range'?rangeControls():''}
    <div class="sizes" role="group" aria-label="Image size">${sz}</div>
    <div class="share-prev" id="sprev"><div class="emptybox">Drawing your roundup…</div></div>
    <div class="actions"><button class="btn gold" data-act="saveimg">${navigator.canShare?'Share or save':'Save image'}</button></div><span class="hint" id="smsg"></span>`);
