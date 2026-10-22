@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.5.4';
+const VERSION='1.6.0';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -46,7 +46,7 @@ async function askPersist(){try{if(navigator.storage&&navigator.storage.persist&
 const ui={tab:'home',ly:'',lm:undefined,st:'Unread',prio:'',q:'',open:{},size:'4x5',hideInstall:false};
 try{const s=JSON.parse(localStorage.getItem('tbr-ui')||'null');if(s)Object.assign(ui,s,{q:''});}catch(e){}
 const hsh=(location.hash||'').slice(1);if(['home','log','library'].includes(hsh))ui.tab=hsh;
-function saveUi(){try{localStorage.setItem('tbr-ui',JSON.stringify({tab:ui.tab,ly:ui.ly,lm:ui.lm,st:ui.st,prio:ui.prio,open:ui.open,size:ui.size,rg:ui.rg,split:ui.split,hideInstall:ui.hideInstall}))}catch(e){}}
+function saveUi(){try{localStorage.setItem('tbr-ui',JSON.stringify({tab:ui.tab,ly:ui.ly,lm:ui.lm,st:ui.st,prio:ui.prio,open:ui.open,size:ui.size,rg:ui.rg,split:ui.split,theme:ui.theme,hideInstall:ui.hideInstall}))}catch(e){}}
 
 const byId=id=>books.find(b=>b.id===id);
 const nextId=()=>Math.max(0,...books.map(x=>x.id))+1;
@@ -998,7 +998,15 @@ document.addEventListener('change',async e=>{
 $('q').addEventListener('input',e=>{ui.q=e.target.value.trim();renderLib();});
 
 /* ---------- roundup image ---------- */
-const C={star:'#FFA41C',bg:'#0E1117',bg2:'#161B25',ink:'#F1F2F5',muted:'#9AA1AF',faint:'#5B6271',gold:'#EDB54E',empty:'#2B313E',line:'#262C38'};
+const THEMES={
+  night:{name:'Night',bg:'#0E1117',bg2:'#161B25',grad:true,glow:'rgba(237,181,78,.22)',ink:'#F1F2F5',muted:'#9AA1AF',faint:'#5B6271',accent:'#EDB54E',empty:'#2B313E',line:'#262C38',star:'#FFA41C',df:'"Bricolage Grotesque", sans-serif',bf:'Manrope, sans-serif',shadow:'rgba(0,0,0,.55)'},
+  paper:{name:'Paper',bg:'#F3EDE2',bg2:'#E9E1D3',ink:'#1E1B16',muted:'#6E665A',faint:'#A39A8B',accent:'#B4532A',empty:'#DDD3C2',line:'#D9CFBD',star:'#E87400',df:'Fraunces, Georgia, serif',bf:'Manrope, sans-serif',shadow:'rgba(60,40,10,.28)'},
+  forest:{name:'Forest',bg:'#1E3A2F',bg2:'#24453A',ink:'#F3EBDD',muted:'#B9C4B6',faint:'#7F9488',accent:'#E2B65C',empty:'#2F5245',line:'#2F5245',star:'#FFA41C',df:'Fraunces, Georgia, serif',bf:'Manrope, sans-serif',shadow:'rgba(0,0,0,.45)'},
+  cobalt:{name:'Cobalt',bg:'#2340D0',bg2:'#2C4BDF',ink:'#FFFFFF',muted:'#C9D2FF',faint:'#93A3F5',accent:'#FFD34D',empty:'#3D57E0',line:'#3D57E0',star:'#FFA41C',df:'"Bricolage Grotesque", sans-serif',bf:'Manrope, sans-serif',shadow:'rgba(5,10,60,.45)'},
+  blush:{name:'Blush',bg:'#F4D9D0',bg2:'#EDCBC0',ink:'#3B1E1A',muted:'#7A5149',faint:'#B08A80',accent:'#A3352B',empty:'#E3BFB4',line:'#E3BFB4',star:'#E87400',df:'Fraunces, Georgia, serif',bf:'Manrope, sans-serif',shadow:'rgba(80,30,20,.25)'},
+  typewriter:{name:'Typewriter',bg:'#FAFAF7',bg2:'#F0F0EA',ink:'#111111',muted:'#5F5F5A',faint:'#A0A09A',accent:'#111111',empty:'#DCDCD5',line:'#111111',star:'#E87400',df:'"Space Mono", ui-monospace, monospace',bf:'"Space Mono", ui-monospace, monospace',shadow:'rgba(0,0,0,.18)'}
+};
+let C=Object.assign({},THEMES.night);
 let lastImg=null,lastImgs=[],lastKind='month';
 function starPath(ctx,cx,cy,R){const r=R*0.47;ctx.beginPath();for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,rr=i%2?r:R;ctx.lineTo(cx+rr*Math.cos(a),cy+rr*Math.sin(a));}ctx.closePath();}
 const rateStr=r=>{const v=Math.round((+r)*100)/100;return String(v);};
@@ -1010,15 +1018,15 @@ let noRemote=false;
 async function imgForCanvas(b){const s=srcFor(b);if(!s)return null;if(b.c==='idb')return loadImg(s,false);if(noRemote)return null;return loadImg(s,true);}
 function drawCover(ctx,b,img,x,y,w,h){
   const rad=Math.max(4,w*0.035);
-  ctx.save();ctx.shadowColor='rgba(0,0,0,.55)';ctx.shadowBlur=w*0.18;ctx.shadowOffsetY=w*0.06;ctx.fillStyle='#000';rr(ctx,x,y,w,h,rad);ctx.fill();ctx.restore();
+  ctx.save();ctx.shadowColor=C.shadow;ctx.shadowBlur=w*0.18;ctx.shadowOffsetY=w*0.06;ctx.fillStyle='#000';rr(ctx,x,y,w,h,rad);ctx.fill();ctx.restore();
   ctx.save();rr(ctx,x,y,w,h,rad);ctx.clip();
   if(img){const s=Math.max(w/img.width,h/img.height),iw=img.width*s,ih=img.height*s;ctx.imageSmoothingQuality='high';ctx.drawImage(img,x+(w-iw)/2,y+(h-ih)/2,iw,ih);}
   else{const [a,z]=hue(b.s+b.t);const g=ctx.createLinearGradient(x,y,x+w*.6,y+h);g.addColorStop(0,a);g.addColorStop(1,z);ctx.fillStyle=g;ctx.fillRect(x,y,w,h);
     ctx.fillStyle='rgba(255,255,255,.16)';ctx.fillRect(x+w*0.07,y,Math.max(2,w*0.012),h);
-    const pad=w*0.14;let fs=w*0.16,ls;for(;fs>8;fs-=1){ctx.font=`800 ${fs}px "Bricolage Grotesque", sans-serif`;ls=wrap(ctx,b.t,w-pad*1.6,5);if(ls.length*fs*1.05<=h*0.55&&ls.every(l=>ctx.measureText(l).width<=w-pad*1.6))break;}
+    const pad=w*0.14;let fs=w*0.16,ls;for(;fs>8;fs-=1){ctx.font=`800 ${fs}px ${C.df}`;ls=wrap(ctx,b.t,w-pad*1.6,5);if(ls.length*fs*1.05<=h*0.55&&ls.every(l=>ctx.measureText(l).width<=w-pad*1.6))break;}
     ctx.fillStyle='#fff';ctx.textAlign='left';ctx.textBaseline='top';ls.forEach((l,i)=>ctx.fillText(l,x+pad,y+h*0.12+i*fs*1.05));
     ctx.fillStyle='rgba(255,255,255,.5)';ctx.fillRect(x+pad,y+h*0.12+ls.length*fs*1.05+fs*0.4,w*0.25,Math.max(2,w*0.012));
-    ctx.font=`600 ${Math.max(8,w*0.075)}px Manrope, sans-serif`;ctx.fillStyle='rgba(255,255,255,.8)';ctx.textBaseline='alphabetic';ctx.fillText(wrap(ctx,author(b.a),w-pad*1.6,1)[0]||'',x+pad,y+h*0.9);}
+    ctx.font=`600 ${Math.max(8,w*0.075)}px ${C.bf}`;ctx.fillStyle='rgba(255,255,255,.8)';ctx.textBaseline='alphabetic';ctx.fillText(wrap(ctx,author(b.a),w-pad*1.6,1)[0]||'',x+pad,y+h*0.9);}
   ctx.restore();ctx.save();rr(ctx,x,y,w,h,rad);ctx.strokeStyle='rgba(255,255,255,.08)';ctx.lineWidth=1.5;ctx.stroke();ctx.restore();
 }
 const SIZES={'1x1':[1080,1080,'Square post'],'4x5':[1080,1350,'Portrait post'],'3x4':[1080,1440,'Grid post'],'9x16':[1080,1920,'Story']};
@@ -1035,23 +1043,24 @@ function plan(n,W,H,minText){
   return best;
 }
 async function render(kind,y,m,size,pg){
+  C=Object.assign({},THEMES[ui.theme]||THEMES.night);
   const RG=kind==='range'?rangeInfo():null;
   const full=RG?RG.list:period(y,m);if(!full.length)return null;const list=pg?pg.list:full;
-  try{await Promise.all(['800 120px "Bricolage Grotesque"','700 32px Manrope','600 30px Manrope','800 30px Manrope'].map(f=>document.fonts.load(f)));}catch(e){}
+  try{await Promise.all([`800 120px ${C.df}`,`700 32px ${C.bf}`,`600 30px ${C.bf}`,`800 30px ${C.bf}`,`400 30px ${C.df}`].map(f=>document.fonts.load(f)));}catch(e){}
   const [W,H]=SIZES[size]||SIZES['4x5'];const story=size==='9x16',square=size==='1x1';
   const P=80,top=story?210:72,bot=story?250:0,footH=square?84:96;
   const cv=document.createElement('canvas');cv.width=W;cv.height=H;const ctx=cv.getContext('2d');
-  const bg=ctx.createLinearGradient(0,0,0,H);bg.addColorStop(0,C.bg2);bg.addColorStop(1,C.bg);ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
-  const glow=ctx.createRadialGradient(W*0.85,-80,10,W*0.85,-80,W*0.9);glow.addColorStop(0,'rgba(237,181,78,.22)');glow.addColorStop(1,'rgba(237,181,78,0)');ctx.fillStyle=glow;ctx.fillRect(0,0,W,H);
+  if(C.grad){const bg=ctx.createLinearGradient(0,0,0,H);bg.addColorStop(0,C.bg2);bg.addColorStop(1,C.bg);ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);}else{ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);}
+  if(C.glow){const glow=ctx.createRadialGradient(W*0.85,-80,10,W*0.85,-80,W*0.9);glow.addColorStop(0,C.glow);glow.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=glow;ctx.fillRect(0,0,W,H);}
   ctx.textBaseline='alphabetic';ctx.textAlign='left';
   const yl=RG?RG.yl:(kind==='month'?y:'');
   const kick=(RG?RG.kick:(kind==='month'?'MONTHLY ROUNDUP':'YEAR IN BOOKS'))+(yl?'  ·  '+yl:'');
-  const ks=square?22:26;ctx.fillStyle=C.gold;ctx.font=`800 ${ks}px Manrope, sans-serif`;let kx=P;for(const chh of kick){ctx.fillText(chh,kx,top+ks);kx+=ctx.measureText(chh).width+(chh===' '?1:5);}
-  if(pg&&pg.total>1){ctx.textAlign='right';ctx.fillStyle=C.muted;ctx.font=`700 ${ks}px Manrope, sans-serif`;ctx.fillText(`${pg.no} / ${pg.total}`,W-P,top+ks);ctx.textAlign='left';}
+  const ks=square?22:26;ctx.fillStyle=C.accent;ctx.font=`800 ${ks}px ${C.bf}`;let kx=P;for(const chh of kick){ctx.fillText(chh,kx,top+ks);kx+=ctx.measureText(chh).width+(chh===' '?1:5);}
+  if(pg&&pg.total>1){ctx.textAlign='right';ctx.fillStyle=C.muted;ctx.font=`700 ${ks}px ${C.bf}`;ctx.fillText(`${pg.no} / ${pg.total}`,W-P,top+ks);ctx.textAlign='left';}
   const title=RG?RG.title:(kind==='month'?FULL[MI(m)]:y);
   const compact=!!(pg&&pg.compact);
-  let fs=compact?(square?84:104):(square?118:(story?164:148));ctx.font=`800 ${fs}px "Bricolage Grotesque", sans-serif`;
-  while(ctx.measureText(title).width>W-P*2&&fs>60){fs-=4;ctx.font=`800 ${fs}px "Bricolage Grotesque", sans-serif`;}
+  let fs=compact?(square?84:104):(square?118:(story?164:148));ctx.font=`800 ${fs}px ${C.df}`;
+  while(ctx.measureText(title).width>W-P*2&&fs>60){fs-=4;ctx.font=`800 ${fs}px ${C.df}`;}
   const tb=top+ks+22+fs*0.76;ctx.fillStyle=C.ink;ctx.fillText(title,P-4,tb);
   const av=avg(full),five=full.filter(b=>+b.r===5).length;
   const stats=[[String(full.length),full.length===1?'book read':'books read'],[av.toFixed(1),'average rating'],[String(five),'five-star reads']];
@@ -1060,9 +1069,9 @@ async function render(kind,y,m,size,pg){
     const sy=tb+fs*0.24+(square?30:42);const colW=(W-P*2)/3;const vf=square?44:(story?60:54),lf=square?16:(story?21:19);const inset=square?22:30;
     ctx.textBaseline='top';
     stats.forEach(([v,l],i)=>{const x=P+i*colW;if(i>0){ctx.fillStyle=C.line;ctx.fillRect(x,sy+4,2,vf+lf*1.6);}const vx=i>0?x+inset:x;
-      ctx.fillStyle=C.ink;ctx.font=`800 ${vf}px "Bricolage Grotesque", sans-serif`;ctx.fillText(v,vx,sy);const vw=ctx.measureText(v).width;
+      ctx.fillStyle=C.ink;ctx.font=`800 ${vf}px ${C.df}`;ctx.fillText(v,vx,sy);const vw=ctx.measureText(v).width;
       if(i===1)drawStars(ctx,vx+vw+12,sy+vf*0.24,vf*0.4,av);
-      ctx.fillStyle=C.muted;ctx.font=`700 ${lf}px Manrope, sans-serif`;let lx=vx;for(const chh of l.toUpperCase()){ctx.fillText(chh,lx,sy+vf*1.1);lx+=ctx.measureText(chh).width+1.5;}});
+      ctx.fillStyle=C.muted;ctx.font=`700 ${lf}px ${C.bf}`;let lx=vx;for(const chh of l.toUpperCase()){ctx.fillText(chh,lx,sy+vf*1.1);lx+=ctx.measureText(chh).width+1.5;}});
     ctx.textBaseline='alphabetic';
     lineY=sy+vf*1.1+lf*1.2+(square?28:40);
   }else lineY=tb+fs*0.24+(square?22:30);
@@ -1077,16 +1086,16 @@ async function render(kind,y,m,size,pg){
   shown.forEach((b,i)=>{const [x,yy]=pos(i),ch=p.cw*1.5;drawCover(ctx,b,imgs[i],x,yy,p.cw,ch);
     let ty=yy+ch+p.cw*0.08;
     if(b.r!==''){const rs=rateStr(b.r);let st=p.st,nf;
-      for(;;){nf=Math.max(9,Math.round(st*0.92));ctx.font=`800 ${nf}px Manrope, sans-serif`;const tot=st*5.64+st*0.4+ctx.measureText(rs).width;if(tot<=p.cw||st<=6)break;st-=1;}
+      for(;;){nf=Math.max(9,Math.round(st*0.92));ctx.font=`800 ${nf}px ${C.bf}`;const tot=st*5.64+st*0.4+ctx.measureText(rs).width;if(tot<=p.cw||st<=6)break;st-=1;}
       const sw=drawStars(ctx,x,ty+(p.st-st)/2,st,+b.r);ctx.fillStyle=C.star;ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(rs,x+sw+st*0.4,ty+p.st/2+1);ctx.textBaseline='alphabetic';}
     ty+=p.st+10;
-    if(p.text){const tfs=Math.round(Math.min(32,Math.max(14,p.cw*0.12)));ctx.fillStyle=C.ink;ctx.font=`700 ${tfs}px Manrope, sans-serif`;ctx.textAlign='left';ctx.textBaseline='top';wrap(ctx,b.t,p.cw,2).forEach((l,k)=>ctx.fillText(l,x,ty+k*tfs*1.2));ctx.textBaseline='alphabetic';}});
+    if(p.text){const tfs=Math.round(Math.min(32,Math.max(14,p.cw*0.12)));ctx.fillStyle=C.ink;ctx.font=`700 ${tfs}px ${C.bf}`;ctx.textAlign='left';ctx.textBaseline='top';wrap(ctx,b.t,p.cw,2).forEach((l,k)=>ctx.fillText(l,x,ty+k*tfs*1.2));ctx.textBaseline='alphabetic';}});
   if(extra){const [x,yy]=pos(shown.length),ch=p.cw*1.5;ctx.save();rr(ctx,x,yy,p.cw,ch,Math.max(4,p.cw*0.035));ctx.fillStyle=C.bg2;ctx.fill();ctx.strokeStyle=C.line;ctx.lineWidth=2;ctx.stroke();ctx.restore();
-    ctx.fillStyle=C.gold;ctx.textAlign='center';ctx.font=`800 ${Math.round(p.cw*0.32)}px "Bricolage Grotesque", sans-serif`;ctx.fillText('+'+extra,x+p.cw/2,yy+ch/2+p.cw*0.08);
-    ctx.fillStyle=C.muted;ctx.font=`700 ${Math.round(p.cw*0.11)}px Manrope, sans-serif`;ctx.fillText('more',x+p.cw/2,yy+ch/2+p.cw*0.24);ctx.textAlign='left';}
+    ctx.fillStyle=C.accent;ctx.textAlign='center';ctx.font=`800 ${Math.round(p.cw*0.32)}px ${C.df}`;ctx.fillText('+'+extra,x+p.cw/2,yy+ch/2+p.cw*0.08);
+    ctx.fillStyle=C.muted;ctx.font=`700 ${Math.round(p.cw*0.11)}px ${C.bf}`;ctx.fillText('more',x+p.cw/2,yy+ch/2+p.cw*0.24);ctx.textAlign='left';}
   ctx.fillStyle=C.line;ctx.fillRect(P,footY,W-P*2,2);
-  ctx.fillStyle=C.ink;ctx.font='800 28px "Bricolage Grotesque", sans-serif';ctx.textAlign='left';ctx.fillText(appTitle(),P,footY+56);
-  ctx.fillStyle=C.muted;ctx.font='600 24px Manrope, sans-serif';ctx.textAlign='right';ctx.fillText(RG?RG.foot:(kind==='month'?`Read in ${FULL[MI(m)]} ${y}`:`Read in ${y}`),W-P,footY+56);
+  ctx.fillStyle=C.ink;ctx.font=`800 28px ${C.df}`;ctx.textAlign='left';ctx.fillText(appTitle(),P,footY+56);
+  ctx.fillStyle=C.muted;ctx.font=`600 24px ${C.bf}`;ctx.textAlign='right';ctx.fillText(RG?RG.foot:(kind==='month'?`Read in ${FULL[MI(m)]} ${y}`:`Read in ${y}`),W-P,footY+56);
   let url;try{url=cv.toDataURL('image/png');}catch(e){if(noRemote)return null;return render2(kind,y,m,size);}
   return{cv,url,name:`roundup-${RG?RG.tag:kind==='month'?`${y}-${pad2(MI(m)+1)}`:y}-${size}${pg&&pg.total>1?'-'+pg.no:''}.png`,shown:shown.length,extra};
 }
@@ -1134,6 +1143,7 @@ async function renderPages(kind){
   for(const [yy,mm] of months){const r=await render('month',yy,mm,ui.size,{list:period(yy,mm),no:++no,total});if(r)out.push(r);}
   return out;
 }
+document.addEventListener('click',e=>{const t=e.target.closest('[data-act="theme"]');if(t){ui.theme=t.dataset.v;saveUi();makeShare(lastKind);}});
 document.addEventListener('click',e=>{const t=e.target.closest('[data-act="split"]');if(t){ui.split=t.dataset.v;saveUi();makeShare(lastKind);}});
 async function makeShare(kind){
   kind=kind||(ui.lm?'month':'year');if(kind==='range')rangeInit();lastKind=kind;if(!SIZES[ui.size])ui.size='4x5';
@@ -1142,6 +1152,7 @@ async function makeShare(kind){
    <div class="seg">${ui.lm?`<button data-act="kind" data-k="month" aria-pressed="${kind==='month'}">Month</button>`:''}<button data-act="kind" data-k="range" aria-pressed="${kind==='range'}">Pick months</button><button data-act="kind" data-k="year" aria-pressed="${kind==='year'}">Whole year</button></div>
    ${kind==='range'?rangeControls():''}
    <div class="sizes" role="group" aria-label="Image size">${sz}</div>
+   <div class="field"><span class="lab">Style</span><div class="themes">${Object.entries(THEMES).map(([k,t])=>`<button data-act="theme" data-v="${k}" aria-pressed="${(ui.theme||'night')===k}" aria-label="${t.name}"><span class="sw" style="background:${t.bg};color:${t.ink};border-color:${t.line}"><b style="font-family:${t.df.replace(/"/g,"'")}">Aa</b><i style="background:${t.accent}"></i></span><span class="tn">${t.name}</span></button>`).join('')}</div></div>
    ${kind!=='month'?`<div class="field"><span class="lab">Slides</span><div class="seg">${[['one','One image'],['months','By month'],['overview','Recap + months']].map(([v,l])=>`<button data-act="split" data-v="${v}" aria-pressed="${(ui.split||'one')===v}">${l}</button>`).join('')}</div><span class="hint">Multiple slides post together as an Instagram carousel.</span></div>`:''}
    <div class="share-prev" id="sprev"><div class="emptybox">Drawing your roundup…</div></div>
    <div class="actions"><button class="btn gold" data-act="saveimg">${navigator.canShare?'Share or save':'Save image'}</button></div><span class="hint" id="smsg"></span>`);
