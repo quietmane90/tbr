@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.1.2';
+const VERSION='1.2.0';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -617,6 +617,8 @@ function impParse(text,name){
   const rows=impCSV(text);if(rows.length<2)throw new Error('format');
   const H=rows[0].map(h=>h.trim().toLowerCase());const col=(...n)=>{for(const x of n){const i=H.indexOf(x);if(i>-1)return i;}return -1;};
   const iT=col('title'),iA=col('author l-f','author','authors');
+  const known=H.includes('activity')||H.includes('exclusive shelf')||H.includes('read status');
+  if(!known)return{src:'Spreadsheet',map:true,H:rows[0].map(h=>h.trim()),rows:rows.slice(1)};
   if(iT<0||iA<0)throw new Error('format');
   const v=(r,i)=>i>-1?String(r[i]||'').trim():'';
   if(H.includes('activity')){
@@ -661,16 +663,77 @@ function importStart(){
   <div class="imp-src"><b>Goodreads</b><span>On goodreads.com in a browser: My Books, then Import and export (left side), then Export Library. Download the file when it is ready.</span></div>
   <div class="imp-src"><b>StoryGraph</b><span>In StoryGraph: your profile, then Manage Account, then Export StoryGraph Library. Download the file when it is ready.</span></div>
   <div class="imp-src"><b>Libby</b><span>In Libby: Shelf, then Timeline, then Actions, then Export Timeline, then Spreadsheet. Save the file.</span></div>
+  <div class="imp-src"><b>Your own spreadsheet</b><span>Any CSV with a header row works, from Excel, Numbers or Google Sheets. You match the columns on the next screen. <button class="link" data-act="imptpl" style="padding:0">Get a blank template</button></span></div>
   <div class="imp-src"><b>Kindle, Audible, Apple Books</b><span>These do not offer an export. Add those books with the + button instead.</span></div>
-  <div class="actions"><label class="btn gold" for="imp-file">Choose the export file</label><input type="file" id="imp-file" accept=".csv,.json,text/csv,application/json" hidden></div>
+  <div class="actions"><label class="btn gold" for="imp-file">Choose a file</label><input type="file" id="imp-file" accept=".csv,.json,.txt,text/csv,application/json" hidden></div>
+  <div class="field"><label for="gs-url">Or paste a Google Sheets link</label><div class="gsrow" style="display:flex;gap:8px"><input class="inp" id="gs-url" placeholder="https://docs.google.com/spreadsheets/d/…" style="flex:1;min-width:0" autocapitalize="off"><button class="btn ghost" data-act="impgs">Import</button></div><span class="hint">The sheet needs sharing set to Anyone with the link.</span></div>
   <span class="hint" id="imp-msg">You will see every book before anything is added.</span>`);
 }
 async function importFile(file){
-  let parsed;try{parsed=impParse(await file.text(),file.name);}catch(e){$('imp-msg').textContent='That file does not look like a Goodreads, StoryGraph or Libby export.';return;}
+  let text='';try{text=await file.text();}catch(e){}
+  importText(text);
+}
+function importText(text){
+  let parsed;try{parsed=impParse(text,'');}catch(e){$('imp-msg').textContent='Could not read that file. It needs to be a CSV with a header row.';return;}
+  if(parsed.map){IMP.map=parsed;return importMap();}
+  importItems(parsed);
+}
+function importItems(parsed){
   IMP.src=parsed.src;IMP.items=parsed.items.map(it=>Object.assign(it,{have:impHave(it),on:!impHave(it)}));
   if(!IMP.items.length){$('imp-msg').textContent='No books found in that file.';return;}
   importReview();
   if(typeof impFillSeries==='function')impFillSeries();
+}
+const IMP_FIELDS=[['t','Title',/^(book\s*)?(title|name)$|^book$/i],['a','Author',/author|writer/i],['s','Series',/^series(\s*name)?$|^series$/i],['n','Book #',/^(#|no\.?|num(ber)?|book\s*#|book\s*(no|number)|series\s*(#|no|number|order|position)|order|position|vol(ume)?)$/i],['st','Status',/status|shelf|state|^read\??$/i],['r','Rating',/rating|stars?|score/i],['df','Date finished',/finish|date\s*read|completed|end(ed)?\s*date|read\s*on|date\s*completed/i],['m','Month finished',/^month/i],['y','Year finished',/^year/i],['ds','Date started',/start/i],['p','Priority',/priority/i],['av','Released',/avail|released|out\??$/i],['no','Notes',/note|comment/i]];
+function importMap(){
+  const M=IMP.map;const H=M.H;const used=new Set();
+  M.sel={};for(const [k,,re] of IMP_FIELDS){let i=H.findIndex((h,j)=>!used.has(j)&&re.test(h));if(k==='s')i=H.findIndex((h,j)=>!used.has(j)&&/series/i.test(h)&&!/#|no|num|order|position/i.test(h));if(i>-1){used.add(i);M.sel[k]=i;}else M.sel[k]=-1;}
+  const ex=M.rows.find(r=>r.some(x=>x.trim()))||[];
+  openSheet(`<div class="sh-head" style="grid-template-columns:1fr auto"><div style="display:grid;gap:4px"><span class="kicker">Import a spreadsheet</span><h3>Match your columns</h3></div>${X}</div>
+  <p class="hint" style="margin:0">${M.rows.length} rows found. I matched what I could. Fix anything that is wrong, then tap Next. Only Title and Author are required.</p>
+  <div class="imp-map">${IMP_FIELDS.map(([k,l])=>`<label class="imp-mrow"><span>${l}${k==='t'||k==='a'?' *':''}</span><select class="imp-msel" data-k="${k}"><option value="-1">Not in my sheet</option>${H.map((h,i)=>`<option value="${i}"${M.sel[k]===i?' selected':''}>${esc(h||'Column '+(i+1))}${ex[i]?' (e.g. '+esc(String(ex[i]).slice(0,24))+')':''}</option>`).join('')}</select></label>`).join('')}</div>
+  <button class="btn gold" data-act="impmapgo" style="width:100%">Next</button>`);
+}
+function impStatus(v,hasDone){v=String(v||'').toLowerCase();
+  if(/dnf|did.?not|abandon|gave up|quit/.test(v))return 'DNF';
+  if(/currently|reading|in progress|started|current/.test(v))return 'Reading';
+  if(/^(read|finished|done|completed|yes|y|true|x|✓|✔)$|finished|completed|^read\b/.test(v))return 'Read';
+  if(/to.?read|want|tbr|unread|not started|next|queue|wishlist|^no$/.test(v))return 'Unread';
+  return hasDone?'Read':'Unread';}
+function impPrio(v){v=String(v||'').toLowerCase();if(/high|top|must|^1$/.test(v))return 'High';if(/low|maybe|^3$/.test(v))return 'Low';if(/sample|test|try/.test(v))return 'Test First';if(/med|^2$/.test(v))return 'Medium';return '';}
+function impRating(v){v=String(v||'').trim();if(!v)return '';const st=(v.match(/★/g)||[]).length+((v.match(/½/g)||[]).length?0.5:0);if(st)return String(st);const n=parseFloat(v.replace(',','.'));if(isNaN(n)||n<=0)return '';return String(n>5?Math.round(n/2*10)/10:n);}
+function impMonth(v){v=String(v||'').trim();if(!v)return '';if(/^\d{1,2}$/.test(v)){const i=+v-1;return MONTHS[i]||'';}const k=v.slice(0,3).toLowerCase();return MONTHS.find(m=>m.toLowerCase()===k)||'';}
+function importMapGo(){
+  const M=IMP.map;document.querySelectorAll('.imp-msel').forEach(s=>M.sel[s.dataset.k]=+s.value);
+  if(M.sel.t<0||M.sel.a<0){toast('Pick the Title and Author columns.');return;}
+  const g=(r,k)=>M.sel[k]>-1?String(r[M.sel[k]]||'').trim():'';
+  const items=[];
+  for(const r of M.rows){
+    const raw=g(r,'t');if(!raw)continue;
+    const p=impSeriesTitle(raw);
+    let s=g(r,'s')||p.s;let n=parseFloat(g(r,'n'));if(isNaN(n))n=p.n;
+    const rating=impRating(g(r,'r'));let df=impDate(g(r,'df'));
+    const m=impMonth(g(r,'m'));const y=(g(r,'y').match(/\d{4}/)||[''])[0];
+    const st=M.sel.st>-1?impStatus(g(r,'st'),!!(df||rating||(m&&y))):((df||rating||(m&&y))?'Read':'Unread');
+    const avv=g(r,'av').toLowerCase();
+    items.push({t:p.t,a:impLF(g(r,'a')),s,n:n==null||isNaN(n)?null:n,st,r:st==='Read'?rating:'',df:st==='Read'?df:'',m:st==='Read'&&!df?m:'',y:st==='Read'&&!df?y:'',ds:impDate(g(r,'ds')),pr:impPrio(g(r,'p')),av:/^(no|n|false|not yet|unreleased)$/.test(avv)?'No':'Yes',no:g(r,'no')});
+  }
+  if(!items.length){toast('No rows with a title found.');return;}
+  importItems({src:'your spreadsheet',items});
+}
+async function importSheetLink(){
+  const u=($('gs-url').value||'').trim();const msg=$('imp-msg');
+  const m=u.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);if(!m){msg.textContent='That does not look like a Google Sheets link.';return;}
+  const gid=(u.match(/[#&?]gid=(\d+)/)||[])[1]||'0';
+  msg.textContent='Opening your sheet…';
+  try{const r=await fetch(`https://docs.google.com/spreadsheets/d/${m[1]}/gviz/tq?tqx=out:csv&gid=${gid}`);if(!r.ok)throw new Error(r.status);const text=await r.text();if(/^\s*</.test(text))throw new Error('private');importText(text);}
+  catch(e){msg.innerHTML='Could not open that sheet. In Google Sheets tap <b>Share</b> and set General access to <b>Anyone with the link</b>, then try again. Or use <b>File, Download, CSV</b> and choose that file above.';}
+}
+function impTemplate(){
+  const csv='Title,Author,Series,Book #,Status,Rating,Date Finished,Priority,Notes\n"Red Rising","Pierce Brown","Red Rising Saga",1,Read,5,2025-07-04,High,\n"Golden Son","Pierce Brown","Red Rising Saga",2,To read,,,High,\n';
+  const blob=new Blob([csv],{type:'text/csv'});
+  if(typeof dl!=='undefined'&&dl){dl.save({filename:'tbr-template.csv',data:blob}).catch(()=>{});return;}
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='tbr-template.csv';document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
 }
 const IMP_ST=[['Unread','To read'],['Reading','Reading'],['Read','Read'],['DNF','DNF']];
 function importReview(){
@@ -689,7 +752,8 @@ function importCommit(){
   const S=[...new Set(books.map(b=>b.s))];let id=Math.max(0,...books.map(x=>x.id));const added=[];
   for(const it of picked){
     const sName=it.s?(S.find(x=>normT(x)===normT(it.s))||it.s):'Standalone';
-    const b={id:++id,a:it.a,s:sName,t:it.t,n:it.n!=null?it.n:1,st:it.st,m:'',y:'',p:it.st==='Unread'?IMP.p:'Medium',r:it.st==='Read'?(it.r||''):'',av:'Yes',no:''};
+    const b={id:++id,a:it.a,s:sName,t:it.t,n:it.n!=null?it.n:1,st:it.st,m:'',y:'',p:it.pr||(it.st==='Unread'?IMP.p:'Medium'),r:it.st==='Read'?(it.r||''):'',av:it.av||'Yes',no:it.no||''};
+    if(it.st==='Read'&&!it.df&&it.m&&it.y){b.m=it.m;b.y=it.y;}
     if(it.ds&&it.st!=='Unread')b.ds=it.ds;
     if(it.st==='Read'&&it.df){b.df=it.df;const d=fromISO(it.df);b.m=d.m;b.y=d.y;}
     books.push(b);added.push(b);
@@ -706,6 +770,9 @@ document.addEventListener('click',e=>{
   const t=e.target.closest('[data-act]');if(!t)return;const a=t.dataset.act;
   if(a==='impstart'){importStart();}
   else if(a==='impgo'){importCommit();}
+  else if(a==='impmapgo'){importMapGo();}
+  else if(a==='impgs'){importSheetLink();}
+  else if(a==='imptpl'){impTemplate();}
   else if(a==='impp'){IMP.p=t.dataset.v;t.parentElement.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===t));}
   else if(a==='impall'){const on=t.dataset.v==='1';IMP.items.forEach(it=>{if(!it.have)it.on=on;});document.querySelectorAll('.imp-cb:not(:disabled)').forEach(c=>c.checked=on);}
 });

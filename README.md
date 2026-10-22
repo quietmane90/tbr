@@ -10,7 +10,7 @@ A free reading tracker that installs to your home screen like an app. It tracks 
 - **Quick add:** type a title and author, scan a cover photo, or add a whole series at once. Pick a priority and the rest is filled in.
 - **Covers:** found automatically from Open Library, Apple Books and Google Books. You can also use your own photo.
 - **New releases:** about once a week, the app checks for new and upcoming books from the authors you read, and marks books as released once they're out.
-- **Import:** bring in your library from Goodreads, StoryGraph or Libby. You review every book before it is added, and missing series are filled in automatically.
+- **Import:** bring in your library from Goodreads, StoryGraph, Libby, any spreadsheet (CSV), or a shared Google Sheets link. You review every book before it is added, and missing series are filled in automatically.
 - **Find on:** jump to a book on Amazon/Kindle, Apple Books, Kobo, Audible, Spotify, Libby, Goodreads or StoryGraph.
 - **Backup:** save your library to a file, and restore it on a new phone.
 - **Offline:** works without a connection once it's installed.
