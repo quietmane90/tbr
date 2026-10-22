@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.5.1';
+const VERSION='1.5.2';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -164,7 +164,7 @@ function renderLog(){
   const list=period(ui.ly,ui.lm);
   const label=ui.lm?`${FULL[MI(ui.lm)]} ${ui.ly}`:ui.ly;
   $('logsum').innerHTML=`<div style="display:grid;gap:2px"><span class="big">${esc(label)}</span><span class="muted" style="font-size:.85rem">${list.length} book${list.length===1?'':'s'} · ${avg(list).toFixed(1)} average · ${list.filter(b=>+b.r===5).length} five-star</span></div><button class="btn gold small" data-act="share" ${list.length?'':'disabled'}>${ICON.share}Share ${ui.lm?'month':'year'}</button>`;
-  $('loggrid').innerHTML=list.length?`${ui.lm&&list.length>1?'<p class="draghint" style="margin:0 0 12px">Hold and drag to set the order you read them.</p>':''}<div class="grid">${list.map(b=>`<button class="gitem" data-act="book" data-id="${b.id}" ${ui.lm?`data-drag="l" data-slot="${b.id}"`:`data-drag="b"`}>${cover(b,'','.72rem')}${stars(b.r,13)}<span class="t">${esc(b.t)}</span><span class="m">${b.s==='Standalone'?esc(author(b.a)):esc(b.s)+' '+fmtN(b.n)}${ui.lm?'':' · '+b.m}</span></button>`).join('')}</div>`:`<div class="emptybox">No finished books logged here yet. When you finish a book, tap Finished it on the Reading tab.</div>`;
+  $('loggrid').innerHTML=list.length?`${ui.lm&&list.length>1?'<p class="draghint" style="margin:0 0 12px">Hold and drag to set the order you read them.</p>':''}<div class="grid">${list.map(b=>`<button class="gitem" data-act="book" data-id="${b.id}" ${ui.lm?`data-drag="l" data-slot="${b.id}"`:`data-drag="b"`}>${cover(b,'','.72rem')}${b.r!==''?`<span class="rrow">${stars(b.r,15)}<b>${rateStr(b.r)}</b></span>`:''}<span class="t">${esc(b.t)}</span><span class="m">${b.s==='Standalone'?esc(author(b.a)):esc(b.s)+' '+fmtN(b.n)}${ui.lm?'':' · '+b.m}</span></button>`).join('')}</div>`:`<div class="emptybox">No finished books logged here yet. When you finish a book, tap Finished it on the Reading tab.</div>`;
 }
 
 /* ---------- library ---------- */
@@ -1001,6 +1001,7 @@ $('q').addEventListener('input',e=>{ui.q=e.target.value.trim();renderLib();});
 const C={bg:'#0E1117',bg2:'#161B25',ink:'#F1F2F5',muted:'#9AA1AF',faint:'#5B6271',gold:'#EDB54E',empty:'#2B313E',line:'#262C38'};
 let lastImg=null,lastImgs=[],lastKind='month';
 function starPath(ctx,cx,cy,R){const r=R*0.47;ctx.beginPath();for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,rr=i%2?r:R;ctx.lineTo(cx+rr*Math.cos(a),cy+rr*Math.sin(a));}ctx.closePath();}
+const rateStr=r=>{const v=Math.round((+r)*100)/100;return String(v);};
 function drawStars(ctx,x,y,size,rating){const gap=size*0.16;for(let i=0;i<5;i++){const cx=x+i*(size+gap)+size/2,cy=y+size/2,f=Math.max(0,Math.min(1,rating-i));starPath(ctx,cx,cy,size/2);ctx.fillStyle=C.empty;ctx.fill();if(f>0){ctx.save();ctx.beginPath();ctx.rect(cx-size/2,cy-size/2,size*f,size);ctx.clip();starPath(ctx,cx,cy,size/2);ctx.fillStyle=C.gold;ctx.fill();ctx.restore();}}return 5*size+4*gap;}
 function rr(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
 function wrap(ctx,text,maxW,maxL){const ws=String(text).split(/\s+/),ls=[];let cur='';for(const w of ws){const t=cur?cur+' '+w:w;if(ctx.measureText(t).width<=maxW||!cur)cur=t;else{ls.push(cur);cur=w;}}if(cur)ls.push(cur);if(ls.length>maxL){ls.length=maxL;let l=ls[maxL-1];while(ctx.measureText(l+'…').width>maxW&&l.length>1)l=l.slice(0,-1);ls[maxL-1]=l.trimEnd()+'…';}return ls;}
@@ -1025,11 +1026,11 @@ function plan(n,W,H,minText){
   let best=null;
   for(let cols=1;cols<=Math.min(n,12);cols++){
     const rows=Math.ceil(n/cols);const gap=cols<=3?40:cols<=5?26:cols<=8?16:12;
-    const chOf=cw=>{const st=Math.max(10,Math.min(30,cw*0.13));return cw*1.5+cw*0.08+st+(cw>=minText?cw*0.12*2.5+12:0);};
+    const chOf=cw=>{const st=Math.max(12,Math.min(44,cw*0.16));const tf=Math.min(32,Math.max(14,cw*0.12));return cw*1.5+cw*0.08+st+10+(cw>=minText?tf*2.5+6:tf*1.25);};
     let cw=Math.min(n===1?380:340,(W-gap*(cols-1))/cols);
     while(cw>=54&&rows*chOf(cw)+(rows-1)*gap*1.1>H)cw-=2;
     if(cw<54)continue;
-    if(!best||cw>best.cw+1){const st=Math.max(10,Math.min(30,cw*0.13));best={cols:Math.ceil(n/rows),gap,cw,text:cw>=minText,st,ch:chOf(cw),rows,tot:rows*chOf(cw)+(rows-1)*gap*1.1};}
+    if(!best||cw>best.cw+1){const st=Math.max(12,Math.min(44,cw*0.16));best={cols:Math.ceil(n/rows),gap,cw,text:cw>=minText,st,ch:chOf(cw),rows,tot:rows*chOf(cw)+(rows-1)*gap*1.1};}
   }
   return best;
 }
@@ -1075,7 +1076,11 @@ async function render(kind,y,m,size,pg){
   const pos=i=>{const r=Math.floor(i/p.cols),c=i%p.cols;const inRow=Math.min(p.cols,slots-r*p.cols);const rowW=inRow*p.cw+(inRow-1)*p.gap;return [P+(W-P*2-rowW)/2+c*(p.cw+p.gap),gy+r*(p.ch+p.gap*1.1)];};
   shown.forEach((b,i)=>{const [x,yy]=pos(i),ch=p.cw*1.5;drawCover(ctx,b,imgs[i],x,yy,p.cw,ch);
     let ty=yy+ch+p.cw*0.08;if(b.r!=='')drawStars(ctx,x,ty,p.st,+b.r);ty+=p.st+10;
-    if(p.text){const tfs=Math.round(Math.min(30,p.cw*0.12));ctx.fillStyle=C.ink;ctx.font=`700 ${tfs}px Manrope, sans-serif`;ctx.textAlign='left';ctx.textBaseline='top';wrap(ctx,b.t,p.cw,2).forEach((l,k)=>ctx.fillText(l,x,ty+k*tfs*1.2));ctx.textBaseline='alphabetic';}});
+    const tfs=Math.round(Math.min(32,Math.max(14,p.cw*0.12)));ctx.textAlign='left';ctx.textBaseline='top';let tx=x;
+    if(b.r!==''){const rs=rateStr(b.r);ctx.fillStyle=C.gold;ctx.font=`800 ${tfs}px Manrope, sans-serif`;ctx.fillText(rs,x,ty);tx=x+ctx.measureText(rs).width+tfs*0.45;}
+    if(p.text){ctx.fillStyle=C.ink;ctx.font=`700 ${tfs}px Manrope, sans-serif`;const words=String(b.t).split(/\s+/);let l1='';while(words.length&&ctx.measureText((l1?l1+' ':'')+words[0]).width<=p.cw-(tx-x))l1+=(l1?' ':'')+words.shift();
+      if(l1)ctx.fillText(l1,tx,ty);const rest=words.join(' ');if(rest)wrap(ctx,rest,p.cw,l1?1:2).forEach((l,k)=>ctx.fillText(l,x,ty+(k+(l1?1:0))*tfs*1.2));}
+    ctx.textBaseline='alphabetic';});
   if(extra){const [x,yy]=pos(shown.length),ch=p.cw*1.5;ctx.save();rr(ctx,x,yy,p.cw,ch,Math.max(4,p.cw*0.035));ctx.fillStyle=C.bg2;ctx.fill();ctx.strokeStyle=C.line;ctx.lineWidth=2;ctx.stroke();ctx.restore();
     ctx.fillStyle=C.gold;ctx.textAlign='center';ctx.font=`800 ${Math.round(p.cw*0.32)}px "Bricolage Grotesque", sans-serif`;ctx.fillText('+'+extra,x+p.cw/2,yy+ch/2+p.cw*0.08);
     ctx.fillStyle=C.muted;ctx.font=`700 ${Math.round(p.cw*0.11)}px Manrope, sans-serif`;ctx.fillText('more',x+p.cw/2,yy+ch/2+p.cw*0.24);ctx.textAlign='left';}
