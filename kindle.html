@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<title>Open in Kindle</title>
+<meta name="robots" content="noindex">
+<style>
+:root{--bg:#F6F4EF;--fg:#16181D;--muted:#5E636E;--line:#E2DED5;--btn:#16181D;--btnfg:#FFFFFF}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0E1117;--fg:#F1F2F5;--muted:#9AA0AB;--line:#262B36;--btn:#F1F2F5;--btnfg:#0E1117}}
+:root[data-theme="dark"]{--bg:#0E1117;--fg:#F1F2F5;--muted:#9AA0AB;--line:#262B36;--btn:#F1F2F5;--btnfg:#0E1117}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overflow-x:clip}
+main{min-height:100dvh;display:grid;place-content:center;gap:14px;padding:24px 16px;text-align:center;max-width:420px;margin:0 auto}
+h1{font-size:1.35rem;margin:0}
+p{margin:0;color:var(--muted);font-size:.95rem}
+a.btn{display:block;padding:15px 18px;border-radius:14px;background:var(--btn);color:var(--btnfg);font-weight:700;text-decoration:none}
+a.alt{color:var(--muted);font-size:.9rem}
+</style>
+</head>
+<body>
+<main>
+  <h1>Opening Kindle…</h1>
+  <p id="msg">If Kindle doesn't open on its own, tap the button.</p>
+  <a class="btn" id="go" href="#">Open in Kindle</a>
+  <a class="alt" id="web" href="#">Read in the browser instead</a>
+</main>
+<script>
+(function(){
+  var q=new URLSearchParams(location.search),asin=(q.get('asin')||'').replace(/[^A-Za-z0-9]/g,'').toUpperCase();
+  var go=document.getElementById('go'),web=document.getElementById('web');
+  if(!/^[A-Z0-9]{10}$/.test(asin)){document.querySelector('h1').textContent='No book ID';document.getElementById('msg').textContent='This link is missing the Kindle book ID.';go.hidden=true;web.hidden=true;return;}
+  var app='kindle://book?action=open&asin='+asin;
+  go.href=app;web.href='https://read.amazon.com/?asin='+asin;
+  setTimeout(function(){location.href=app;},150);
+})();
+</script>
+</body>
+</html>
