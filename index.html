@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
 <title>My TBR</title>
 <meta name="description" content="A reading tracker for your phone: what you're reading, what's next, your reading log, and shareable roundups.">
 <meta name="theme-color" content="#F2F3F6" media="(prefers-color-scheme: light)">
@@ -304,6 +304,10 @@ details.edit>summary::after{content:" +";color:var(--gold)}details.edit[open]>su
 .row2>*{min-width:0}
 input.inp[type="date"]{-webkit-appearance:none;appearance:none;min-width:0;max-width:100%;display:block;min-height:46px;text-align:left}
 input.inp[type="date"]::-webkit-date-and-time-value{text-align:left}
+
+/* phone fit: no sideways drift, no iOS focus zoom */
+html,body{max-width:100%;overflow-x:clip;overscroll-behavior-x:none}
+@media (pointer:coarse){input,select,textarea{font-size:16px!important}}
 </style>
 </head>
 <body>

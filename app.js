@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.7.4';
+const VERSION='1.7.5';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -842,10 +842,10 @@ function openLinks(b){
   const apple=b.ab||`https://www.google.com/search?q=${encodeURIComponent('site:books.apple.com '+full)}`;
   setTimeout(()=>resolveApple(b),0);setTimeout(()=>resolveAsin(b),0);
   const asin=b.asin||'';
-  const kd=asin?`<a class="btn small" id="kdlink" href="kindle://book?action=open&asin=${esc(asin)}">Kindle app ${EXT}</a>`:b.amzs?`<a class="btn small" id="kdlink" href="${esc(b.amzs)}" target="_blank" rel="noopener">Kindle app ${EXT}</a>`:`<button class="btn small" id="kdlink" data-act="kdlink">Kindle app ${EXT}</button>`;
+  const kd=asin?`<a class="btn small" id="kdlink" href="kindle://book?action=open&asin=${esc(asin)}">Kindle app ${EXT}</a>`:`<button class="btn small" id="kdlink" data-act="kdlink">Kindle app ${EXT}</button>`;
   const amz=`<a class="btn ghost small" id="amzlink" href="${asin?`https://www.amazon.com/dp/${esc(asin)}`:b.amzs?esc(b.amzs):`https://www.amazon.com/s?k=${q}&i=digital-text`}" target="_blank" rel="noopener">Amazon ${EXT}</a>`;
   return `<div class="fo-wrap">${row('Buy',[kd,amz,`<a class="btn ghost small" id="ablink" href="${esc(apple)}" target="_blank" rel="noopener">Apple Books ${EXT}</a>`,L('Kobo',`https://www.kobo.com/us/en/search?query=${q}`)])}
-  <div id="kdset" hidden style="grid-template-columns:minmax(0,1fr);gap:6px;margin:2px 0 6px;min-width:0;max-width:100%"><span class="hint">To open this book in Kindle, the app needs its Amazon link once. Tap Amazon above, open the book, tap Share, then Copy Link, and paste it here. Kindle+ books use the same link as the store page.</span><div style="display:flex;gap:8px"><input class="inp" id="kdkey" placeholder="Paste Amazon link" autocapitalize="off" autocorrect="off" style="flex:1 1 0;width:auto;min-width:0"><button class="btn small" data-act="kdsave" style="flex:none">Save</button></div><span class="hint" id="kdmsg" style="color:var(--accent,#B4532A)"></span></div>
+  <div id="kdset" hidden style="grid-template-columns:minmax(0,1fr);gap:6px;margin:2px 0 6px;min-width:0;max-width:100%"><span class="hint">To open this book straight in Kindle, the app needs its ASIN once. Tap Amazon above, open the book, scroll to Product details, and copy the ASIN (it starts with B0). Paste it here. A full amazon.com link from Safari works too. Short a.co links from the Share button only open Amazon.</span><div style="display:flex;gap:8px"><input class="inp" id="kdkey" placeholder="Paste Amazon link" autocapitalize="off" autocorrect="off" style="flex:1 1 0;width:auto;min-width:0"><button class="btn small" data-act="kdsave" style="flex:none">Save</button></div><span class="hint" id="kdmsg" style="color:var(--accent,#B4532A)"></span></div>
   ${row('Listen',[L('Audible',`https://www.audible.com/search?keywords=${q}`),L('Spotify',`https://open.spotify.com/search/${q}/audiobooks`)])}
   ${row('Borrow',[L('Libby',libby)])}
   ${lib?'':`<details class="libset"><summary class="hint">Set your library so Libby opens straight to this book</summary><div style="display:grid;gap:6px;margin-top:8px"><span class="hint">In Libby, open your library. The web address ends in its code, like libbyapp.com/library/<b>hcpl</b>. Type that code here.</span><input class="inp" id="libkey" placeholder="Library code" autocapitalize="off" autocorrect="off"></div></details>`}
@@ -867,7 +867,7 @@ function parseAsin(v){v=String(v||'').trim();const m=v.match(/(?:\/dp\/|\/gp\/pr
 function kdApply(v,quiet){if(sheetBook==null)return;const b=byId(sheetBook);if(!b)return;v=String(v||'').trim();if(!v){if(!quiet)toast('Paste the Amazon link first');return;}const id=parseAsin(v);
   const msg=t=>{const m=document.getElementById('kdmsg');if(m)m.textContent=t;toast(t);};
   const sh=v.match(/https?:\/\/a\.co\/[^\s]+/i);
-  if(!id&&sh){b.amzs=sh[0];mark();if(typeof IDB==='undefined')setTimeout(()=>{const s=document.getElementById('saveBtn');if(s&&!s.hidden)s.click();},400);const k=document.getElementById('kdlink'),a=document.getElementById('amzlink'),d=document.getElementById('kdset');if(k)k.outerHTML=`<a class="btn small" id="kdlink" href="${esc(b.amzs)}" target="_blank" rel="noopener">Kindle app ${EXT}</a>`;if(a)a.href=b.amzs;if(d){d.hidden=true;d.style.display='none';}toast('Saved. Kindle app opens the book in Amazon, then tap Read for free.');return;}
+  if(!id&&sh){b.amzs=sh[0];mark();if(typeof IDB==='undefined')setTimeout(()=>{const s=document.getElementById('saveBtn');if(s&&!s.hidden)s.click();},400);const k=document.getElementById('kdlink'),a=document.getElementById('amzlink'),d=document.getElementById('kdset');if(a)a.href=b.amzs;if(d){d.hidden=true;d.style.display='none';}toast('Saved, but short links open Amazon, not Kindle. Paste the ASIN for a direct jump.');return;}
   if(!id){if(quiet)return;msg(/a\.co\//i.test(v)?'That short a.co link hides the book ID. Open it in Safari, then copy the full amazon.com address.':'No Amazon book ID in that link');return;}
   b.asin=id;showAsin(b);mark();if(typeof IDB==='undefined')setTimeout(()=>{const s=document.getElementById('saveBtn');if(s&&!s.hidden)s.click();},400);toast('Kindle book linked');}
 let kdT;document.addEventListener('input',e=>{if(e.target.id!=='kdkey')return;clearTimeout(kdT);const v=e.target.value;kdT=setTimeout(()=>kdApply(v,true),300);});
