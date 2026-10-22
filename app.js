@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.6.3';
+const VERSION='1.6.4';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -1091,8 +1091,8 @@ async function render(kind,y,m,size,pg){
   }else lineY=tb+TD+(square?24:32);
   ctx.fillStyle=C.line;ctx.fillRect(P,lineY,W-P*2,2);
   const gy0=lineY+(square?32:44),footY=H-bot-footH,gridH=footY-gy0-(square?24:34);
-  let p=plan(list.length,W-P*2,gridH,0),shown=list,extra=0;
-  if(!p){for(let k=list.length-1;k>=2;k--){p=plan(k,W-P*2,gridH,0);if(p){shown=list.slice(0,k-1);extra=list.length-shown.length;break;}}}
+  let p=plan(list.length,W-P*2,gridH,150),shown=list,extra=0;
+  if(!p){for(let k=list.length-1;k>=2;k--){p=plan(k,W-P*2,gridH,150);if(p){shown=list.slice(0,k-1);extra=list.length-shown.length;break;}}}
   if(!p)return null;
   const imgs=await Promise.all(shown.map(imgForCanvas));
   const slots=shown.length+(extra?1:0);const gy=gy0+Math.max(0,(gridH-p.tot)*0.4);
