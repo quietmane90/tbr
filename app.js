@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.2.1';
+const VERSION='1.3.0';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -587,7 +587,7 @@ async function restoreBackup(file){
 
 
 /* ---------- import: Goodreads, StoryGraph, Libby (shared) ---------- */
-const IMP={items:[],src:'',p:'Medium'};
+const IMP={items:[],src:'',p:'Medium',shotSt:''};
 const impLast=a=>String(a||'').split('&')[0].split(',')[0].trim();
 function impCSV(text){
   const rows=[];let row=[],f='',q=false;
@@ -660,10 +660,14 @@ function impLibby(events){
 }
 const impHave=it=>books.some(b=>normT(b.t)===normT(it.t)&&normT(impLast(b.a))===normT(impLast(it.a)));
 function importStart(){
+  if(!IMP.shotSt)IMP.shotSt=SHOT_ST()[0][0];
   openSheet(`<div class="sh-head" style="grid-template-columns:1fr auto"><div style="display:grid;gap:4px"><span class="kicker">Import</span><h3>Bring your books over</h3></div>${X}</div>
   <div class="imp-src"><b>Goodreads</b><span>On goodreads.com in a browser: My Books, then Import and export (left side), then Export Library. Download the file when it is ready.</span></div>
   <div class="imp-src"><b>StoryGraph</b><span>In StoryGraph: your profile, then Manage Account, then Export StoryGraph Library. Download the file when it is ready.</span></div>
   <div class="imp-src"><b>Libby</b><span>In Libby: Shelf, then Timeline, then Actions, then Export Timeline, then Spreadsheet. Save the file.</span></div>
+  <div class="imp-src shots"><b>Screenshots (Kindle, Apple Books, Audible, anywhere)</b><span>Take screenshots of your library and add them all at once. List view works best because the titles and authors show as text. Photos of your shelf work too.</span>
+    <div class="seg" style="margin-top:6px">${SHOT_ST().map(([v,l])=>`<button type="button" data-act="shotst" data-v="${v}" aria-pressed="${IMP.shotSt===v}">${l}</button>`).join('')}</div>
+    <div class="actions" style="margin-top:6px"><label class="btn ghost" for="imp-shots">Choose screenshots</label><input type="file" id="imp-shots" accept="image/*" multiple hidden></div></div>
   <div class="imp-src"><b>Your own spreadsheet</b><span>Any CSV with a header row works, from Excel, Numbers or Google Sheets. You match the columns on the next screen. <button class="link" data-act="imptpl" style="padding:0">Get a blank template</button></span></div>
   <div class="imp-src"><b>Kindle, Audible, Apple Books</b><span>These do not offer an export. Add those books with the + button instead.</span></div>
   <div class="actions"><label class="btn gold" for="imp-file">Choose a file</label><input type="file" id="imp-file" accept=".csv,.json,.txt,text/csv,application/json" hidden></div>
@@ -736,6 +740,53 @@ function impTemplate(){
   if(typeof dl!=='undefined'&&dl){dl.save({filename:'tbr-template.csv',data:blob}).catch(()=>{});return;}
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='tbr-template.csv';document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
 }
+
+/* ---------- screenshots: read titles from pictures of a library ---------- */
+async function importShots(files){
+  files=[...files].filter(f=>/^image\//.test(f.type)||/\.(png|jpe?g|heic|webp)$/i.test(f.name));if(!files.length)return;
+  const msg=$('imp-msg');const prog=(i,n,extra)=>{if(msg)msg.textContent=`Reading screenshot ${Math.min(i+1,n)} of ${n}…${extra?' '+extra:''}`;};
+  let items=[];
+  try{items=await shotsToItems(files,IMP.shotSt||'Read',prog);}
+  catch(e){if(msg)msg.textContent=e&&e.message==='offline'?'You are offline. Try again with a connection.':'Could not read those screenshots. Try clearer ones, or list view.';return;}
+  const seen=new Set();items=items.filter(it=>{const k=normT(it.t)+'|'+normT(impLast(it.a));if(!it.t||seen.has(k))return false;seen.add(k);return true;});
+  if(!items.length){if(msg)msg.textContent='Could not find any books in those screenshots. List view with titles showing works best.';return;}
+  importItems({src:'your screenshots',items});
+}
+async function shrinkImage(file,max){
+  try{const bmp=await createImageBitmap(file);const sc=Math.min(1,max/Math.max(bmp.width,bmp.height));if(sc>=1&&file.size<1.5e6)return file;
+    const c=document.createElement('canvas');c.width=Math.round(bmp.width*sc);c.height=Math.round(bmp.height*sc);c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);
+    return await new Promise(r=>c.toBlob(b=>r(b||file),'image/jpeg',0.86));}catch(e){return file;}
+}
+
+const SHOT_ST=()=>[['Read','All read'],['Reading','Reading'],['Unread','Want to read']];
+const SHOT_NOISE=/^(library|all|books?|audiobooks?|samples?|finished|want to read|reading now|currently reading|collections?|downloaded|downloads|sort|sort by|filter|edit|select|search|home|store|book store|read|unread|kindle|apple books|audible|libby|shelf|list|grid|recent|title|author|more|done|cancel|see all|view all|new|sample|pdfs?|my books|loans|holds|tags|notes|highlights)$/i;
+async function shotsToItems(files,defSt,prog){
+  if(!navigator.onLine)throw new Error('offline');
+  const T=await loadTess();const lines=[];
+  for(let i=0;i<files.length;i++){
+    prog(i,files.length,'(the first one takes longest)');
+    try{const img=await shrinkImage(files[i],2400);const r=await T.recognize(img,'eng');
+      for(const l of r.data.lines||[]){if(l.confidence<55)continue;const t=l.text.replace(/[|_~^*<>{}\[\]]/g,' ').replace(/\s+/g,' ').trim();if(t)lines.push(t);}}catch(e){}
+  }
+  const cand=[];const seen=new Set();
+  for(const raw of lines){
+    let t=raw.replace(/^by\s+/i,'').replace(/\s*\d{1,3}\s*%.*$/,'').replace(/\s*[·•]\s*.*$/,'').trim();
+    if(t.length<3||SHOT_NOISE.test(t)||/^\d+([:.,]\d+)*\s*(h|hr|hrs|m|min|mins|left|pages?)?\b/i.test(t)||!/[a-z]{2}/i.test(t))continue;
+    const k=normT(t);if(seen.has(k))continue;seen.add(k);cand.push(t);
+  }
+  const out=[];const authors=new Set();
+  for(let i=0;i<cand.length&&i<150;i++){
+    const t=cand[i];if(authors.has(normT(t)))continue;
+    prog(files.length-1,files.length,`Matching ${i+1} of ${Math.min(cand.length,150)}…`);
+    let hits=[];try{hits=await olSearch(t,'',5);}catch(e){}
+    if(!hits.length){try{hits=await gbSearch(`intitle:${t}`,5);}catch(e){}}
+    const nt=normT(t.replace(/^(the|a|an)\s+/i,''));
+    const hit=hits.find(h=>{const ht=normT(baseTitle(parseSeriesTitle(h.t).t).replace(/^(the|a|an)\s+/i,''));return ht&&h.a&&(ht===nt||(nt.length>=8&&(ht.startsWith(nt)||nt.startsWith(ht))));});
+    if(hit){const p=parseSeriesTitle(hit.t);out.push({t:p.t,a:toLastFirst(hit.a),s:hit.series||p.s||'',n:hit.n||p.n||null,st:defSt,r:'',df:'',ds:''});authors.add(normT(hit.a));}
+    await sleep(200);
+  }
+  return out;
+}
 const IMP_ST=[['Unread','To read'],['Reading','Reading'],['Read','Read'],['DNF','DNF']];
 function importReview(){
   const L=IMP.items;const fresh=L.filter(x=>!x.have).length;
@@ -764,6 +815,7 @@ function importCommit(){
 document.addEventListener('change',e=>{
   const t=e.target;
   if(t.id==='imp-file'){const f=t.files&&t.files[0];if(f)importFile(f);}
+  if(t.id==='imp-shots'){const f=t.files;if(f&&f.length)importShots(f);}
   if(t.classList&&t.classList.contains('imp-cb')){const it=IMP.items[+t.dataset.i];if(it)it.on=t.checked;}
   if(t.classList&&t.classList.contains('imp-st')){const it=IMP.items[+t.dataset.i];if(it)it.st=t.value;}
 });
@@ -774,6 +826,7 @@ document.addEventListener('click',e=>{
   else if(a==='impmapgo'){importMapGo();}
   else if(a==='impgs'){importSheetLink();}
   else if(a==='imptpl'){impTemplate();}
+  else if(a==='shotst'){IMP.shotSt=t.dataset.v;t.parentElement.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===t));}
   else if(a==='impp'){IMP.p=t.dataset.v;t.parentElement.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===t));}
   else if(a==='impall'){const on=t.dataset.v==='1';IMP.items.forEach(it=>{if(!it.have)it.on=on;});document.querySelectorAll('.imp-cb:not(:disabled)').forEach(c=>c.checked=on);}
 });
