@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.7.8';
+const VERSION='1.7.9';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -1086,7 +1086,7 @@ async function render(kind,y,m,size,pg){
   const full=RG?RG.list:period(y,m);if(!full.length)return null;const list=pg?pg.list:full;
   try{await Promise.all([`800 120px ${C.df}`,`700 32px ${C.bf}`,`600 30px ${C.bf}`,`800 30px ${C.bf}`,`400 30px ${C.df}`].map(f=>document.fonts.load(f)));}catch(e){}
   const [W,H]=SIZES[size]||SIZES['4x5'];const story=size==='9x16',square=size==='1x1';
-  const P=80,top=story?210:72,bot=story?250:0,footH=square?84:96;
+  const P=80,top=story?210:72,bot=story?250:0,footH=square?40:48;
   const cv=document.createElement('canvas');cv.width=W;cv.height=H;const ctx=cv.getContext('2d');
   if(C.grad){const bg=ctx.createLinearGradient(0,0,0,H);bg.addColorStop(0,C.bg2);bg.addColorStop(1,C.bg);ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);}else{ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);}
   if(C.glow){const glow=ctx.createRadialGradient(W*0.85,-80,10,W*0.85,-80,W*0.9);glow.addColorStop(0,C.glow);glow.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=glow;ctx.fillRect(0,0,W,H);}
@@ -1122,7 +1122,7 @@ async function render(kind,y,m,size,pg){
   if(!p){for(let k=list.length-1;k>=2;k--){p=plan(k,W-P*2,gridH,150);if(p){shown=list.slice(0,k-1);extra=list.length-shown.length;break;}}}
   if(!p)return null;
   const imgs=await Promise.all(shown.map(imgForCanvas));
-  const slots=shown.length+(extra?1:0);const gy=gy0+Math.max(0,(gridH-p.tot)*0.4);
+  const slots=shown.length+(extra?1:0);const gy=gy0+Math.max(0,(gridH-p.tot)*0.5);
   const pos=i=>{const r=Math.floor(i/p.cols),c=i%p.cols;const inRow=Math.min(p.cols,slots-r*p.cols);const rowW=inRow*p.cw+(inRow-1)*p.gap;return [P+(W-P*2-rowW)/2+c*(p.cw+p.gap),gy+r*(p.ch+p.gap*1.1)];};
   let tfsG=Math.round(Math.min(32,Math.max(16,p.cw*0.12)));const tW=p.cw+Math.min(p.gap*0.6,14);for(;tfsG>12;tfsG--){ctx.font=`700 ${tfsG}px ${C.bf}`;if(!shown.some(b=>String(b.t).split(/\s+/).some(w=>ctx.measureText(w).width>tW)))break;}
   shown.forEach((b,i)=>{const [x,yy]=pos(i),ch=p.cw*1.5;drawCover(ctx,b,imgs[i],x,yy,p.cw,ch);
@@ -1135,9 +1135,7 @@ async function render(kind,y,m,size,pg){
   if(extra){const [x,yy]=pos(shown.length),ch=p.cw*1.5;ctx.save();rr(ctx,x,yy,p.cw,ch,Math.max(4,p.cw*0.035));ctx.fillStyle=C.bg2;ctx.fill();ctx.strokeStyle=C.line;ctx.lineWidth=2;ctx.stroke();ctx.restore();
     ctx.fillStyle=C.accent;ctx.textAlign='center';ctx.font=`800 ${Math.round(p.cw*0.32)}px ${C.df}`;ctx.fillText('+'+extra,x+p.cw/2,yy+ch/2+p.cw*0.08);
     ctx.fillStyle=C.muted;ctx.font=`700 ${Math.round(p.cw*0.11)}px ${C.bf}`;ctx.fillText('more',x+p.cw/2,yy+ch/2+p.cw*0.24);ctx.textAlign='left';}
-  ctx.fillStyle=C.line;ctx.fillRect(P,footY,W-P*2,2);
-  ctx.fillStyle=C.ink;ctx.font=`800 28px ${C.df}`;ctx.textAlign='left';ctx.fillText(appTitle(),P,footY+56);
-  ctx.fillStyle=C.muted;ctx.font=`600 24px ${C.bf}`;ctx.textAlign='right';ctx.fillText(RG?RG.foot:(kind==='month'?`Read in ${FULL[MI(m)]} ${y}`:`Read in ${y}`),W-P,footY+56);
+  ctx.textAlign='left';
   let url;try{url=cv.toDataURL('image/png');}catch(e){if(noRemote)return null;return render2(kind,y,m,size);}
   return{cv,url,name:`roundup-${RG?RG.tag:kind==='month'?`${y}-${pad2(MI(m)+1)}`:y}-${size}${pg&&pg.total>1?'-'+pg.no:''}.png`,shown:shown.length,extra};
 }
