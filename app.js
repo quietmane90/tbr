@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.5.2';
+const VERSION='1.5.3';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -1026,11 +1026,11 @@ function plan(n,W,H,minText){
   let best=null;
   for(let cols=1;cols<=Math.min(n,12);cols++){
     const rows=Math.ceil(n/cols);const gap=cols<=3?40:cols<=5?26:cols<=8?16:12;
-    const chOf=cw=>{const st=Math.max(12,Math.min(44,cw*0.16));const tf=Math.min(32,Math.max(14,cw*0.12));return cw*1.5+cw*0.08+st+10+(cw>=minText?tf*2.5+6:tf*1.25);};
+    const chOf=cw=>{const st=Math.max(8,Math.min(40,cw*0.12));const tf=Math.min(32,Math.max(14,cw*0.12));return cw*1.5+cw*0.08+st+10+(cw>=minText?tf*2.5+6:0);};
     let cw=Math.min(n===1?380:340,(W-gap*(cols-1))/cols);
     while(cw>=54&&rows*chOf(cw)+(rows-1)*gap*1.1>H)cw-=2;
     if(cw<54)continue;
-    if(!best||cw>best.cw+1){const st=Math.max(12,Math.min(44,cw*0.16));best={cols:Math.ceil(n/rows),gap,cw,text:cw>=minText,st,ch:chOf(cw),rows,tot:rows*chOf(cw)+(rows-1)*gap*1.1};}
+    if(!best||cw>best.cw+1){const st=Math.max(8,Math.min(40,cw*0.12));best={cols:Math.ceil(n/rows),gap,cw,text:cw>=minText,st,ch:chOf(cw),rows,tot:rows*chOf(cw)+(rows-1)*gap*1.1};}
   }
   return best;
 }
@@ -1075,12 +1075,12 @@ async function render(kind,y,m,size,pg){
   const slots=shown.length+(extra?1:0);const gy=gy0+Math.max(0,(gridH-p.tot)*0.4);
   const pos=i=>{const r=Math.floor(i/p.cols),c=i%p.cols;const inRow=Math.min(p.cols,slots-r*p.cols);const rowW=inRow*p.cw+(inRow-1)*p.gap;return [P+(W-P*2-rowW)/2+c*(p.cw+p.gap),gy+r*(p.ch+p.gap*1.1)];};
   shown.forEach((b,i)=>{const [x,yy]=pos(i),ch=p.cw*1.5;drawCover(ctx,b,imgs[i],x,yy,p.cw,ch);
-    let ty=yy+ch+p.cw*0.08;if(b.r!=='')drawStars(ctx,x,ty,p.st,+b.r);ty+=p.st+10;
-    const tfs=Math.round(Math.min(32,Math.max(14,p.cw*0.12)));ctx.textAlign='left';ctx.textBaseline='top';let tx=x;
-    if(b.r!==''){const rs=rateStr(b.r);ctx.fillStyle=C.gold;ctx.font=`800 ${tfs}px Manrope, sans-serif`;ctx.fillText(rs,x,ty);tx=x+ctx.measureText(rs).width+tfs*0.45;}
-    if(p.text){ctx.fillStyle=C.ink;ctx.font=`700 ${tfs}px Manrope, sans-serif`;const words=String(b.t).split(/\s+/);let l1='';while(words.length&&ctx.measureText((l1?l1+' ':'')+words[0]).width<=p.cw-(tx-x))l1+=(l1?' ':'')+words.shift();
-      if(l1)ctx.fillText(l1,tx,ty);const rest=words.join(' ');if(rest)wrap(ctx,rest,p.cw,l1?1:2).forEach((l,k)=>ctx.fillText(l,x,ty+(k+(l1?1:0))*tfs*1.2));}
-    ctx.textBaseline='alphabetic';});
+    let ty=yy+ch+p.cw*0.08;
+    if(b.r!==''){const rs=rateStr(b.r);let st=p.st,nf;
+      for(;;){nf=Math.max(9,Math.round(st*0.92));ctx.font=`800 ${nf}px Manrope, sans-serif`;const tot=st*5.64+st*0.4+ctx.measureText(rs).width;if(tot<=p.cw||st<=6)break;st-=1;}
+      const sw=drawStars(ctx,x,ty+(p.st-st)/2,st,+b.r);ctx.fillStyle=C.gold;ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(rs,x+sw+st*0.4,ty+p.st/2+1);ctx.textBaseline='alphabetic';}
+    ty+=p.st+10;
+    if(p.text){const tfs=Math.round(Math.min(32,Math.max(14,p.cw*0.12)));ctx.fillStyle=C.ink;ctx.font=`700 ${tfs}px Manrope, sans-serif`;ctx.textAlign='left';ctx.textBaseline='top';wrap(ctx,b.t,p.cw,2).forEach((l,k)=>ctx.fillText(l,x,ty+k*tfs*1.2));ctx.textBaseline='alphabetic';}});
   if(extra){const [x,yy]=pos(shown.length),ch=p.cw*1.5;ctx.save();rr(ctx,x,yy,p.cw,ch,Math.max(4,p.cw*0.035));ctx.fillStyle=C.bg2;ctx.fill();ctx.strokeStyle=C.line;ctx.lineWidth=2;ctx.stroke();ctx.restore();
     ctx.fillStyle=C.gold;ctx.textAlign='center';ctx.font=`800 ${Math.round(p.cw*0.32)}px "Bricolage Grotesque", sans-serif`;ctx.fillText('+'+extra,x+p.cw/2,yy+ch/2+p.cw*0.08);
     ctx.fillStyle=C.muted;ctx.font=`700 ${Math.round(p.cw*0.11)}px Manrope, sans-serif`;ctx.fillText('more',x+p.cw/2,yy+ch/2+p.cw*0.24);ctx.textAlign='left';}
@@ -1142,7 +1142,7 @@ async function makeShare(kind){
    <div class="seg">${ui.lm?`<button data-act="kind" data-k="month" aria-pressed="${kind==='month'}">Month</button>`:''}<button data-act="kind" data-k="range" aria-pressed="${kind==='range'}">Pick months</button><button data-act="kind" data-k="year" aria-pressed="${kind==='year'}">Whole year</button></div>
    ${kind==='range'?rangeControls():''}
    <div class="sizes" role="group" aria-label="Image size">${sz}</div>
-   ${kind!=='month'?`<div class="field"><span class="lab">Slides</span><div class="seg">${[['one','One image'],['months','A slide per month'],['overview','Overview + months']].map(([v,l])=>`<button data-act="split" data-v="${v}" aria-pressed="${(ui.split||'one')===v}">${l}</button>`).join('')}</div><span class="hint">Multiple slides post together as an Instagram carousel.</span></div>`:''}
+   ${kind!=='month'?`<div class="field"><span class="lab">Slides</span><div class="seg">${[['one','One image'],['months','By month'],['overview','Recap + months']].map(([v,l])=>`<button data-act="split" data-v="${v}" aria-pressed="${(ui.split||'one')===v}">${l}</button>`).join('')}</div><span class="hint">Multiple slides post together as an Instagram carousel.</span></div>`:''}
    <div class="share-prev" id="sprev"><div class="emptybox">Drawing your roundup…</div></div>
    <div class="actions"><button class="btn gold" data-act="saveimg">${navigator.canShare?'Share or save':'Save image'}</button></div><span class="hint" id="smsg"></span>`);
   const rs=await renderPages(kind);if(!rs.length||!$('sprev'))return;const r=rs[0];
