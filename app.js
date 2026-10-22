@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.7.9';
+const VERSION='1.8.0';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -1093,8 +1093,7 @@ async function render(kind,y,m,size,pg){
   ctx.textBaseline='alphabetic';ctx.textAlign='left';
   const yl=RG?RG.yl:(kind==='month'?y:'');
   const kick=(RG?RG.kick:(kind==='month'?'MONTHLY ROUNDUP':'YEAR IN BOOKS'))+(yl?'  ·  '+yl:'');
-  const ks=square?22:26;let kfs=ks;const pgw=(pg&&pg.total>1)?(ctx.font=`700 ${ks}px ${C.bf}`,ctx.measureText(`${pg.no} / ${pg.total}`).width+28):0;const trk=ch=>ch===' '?1:5;for(;kfs>14;kfs--){ctx.font=`800 ${kfs}px ${C.bf}`;let tw=0;for(const chh of kick)tw+=ctx.measureText(chh).width+trk(chh);if(tw<=W-P*2-pgw)break;}ctx.fillStyle=C.accent;ctx.font=`800 ${kfs}px ${C.bf}`;let kx=P;for(const chh of kick){ctx.fillText(chh,kx,top+ks);kx+=ctx.measureText(chh).width+(chh===' '?1:5);}
-  if(pg&&pg.total>1){ctx.textAlign='right';ctx.fillStyle=C.muted;ctx.font=`700 ${ks}px ${C.bf}`;ctx.fillText(`${pg.no} / ${pg.total}`,W-P,top+ks);ctx.textAlign='left';}
+  const ks=square?22:26;let kfs=ks;const pgw=0;const trk=ch=>ch===' '?1:5;for(;kfs>14;kfs--){ctx.font=`800 ${kfs}px ${C.bf}`;let tw=0;for(const chh of kick)tw+=ctx.measureText(chh).width+trk(chh);if(tw<=W-P*2-pgw)break;}ctx.fillStyle=C.accent;ctx.font=`800 ${kfs}px ${C.bf}`;let kx=P;for(const chh of kick){ctx.fillText(chh,kx,top+ks);kx+=ctx.measureText(chh).width+(chh===' '?1:5);}
   const title=RG?RG.title:(kind==='month'?FULL[MI(m)]:y);
   const compact=!!(pg&&pg.compact);
   let fs=compact?(square?84:104):(square?118:(story?164:148));ctx.font=`800 ${fs}px ${C.df}`;
