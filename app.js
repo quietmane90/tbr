@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.6.4';
+const VERSION='1.7.0';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -840,13 +840,32 @@ function openLinks(b){
   const lib=(getLibby()||'').trim();
   const libby=lib?`https://libbyapp.com/search/${encodeURIComponent(lib)}/search/query-${encodeURIComponent(full)}/page-1`:'https://libbyapp.com/';
   const apple=b.ab||`https://www.google.com/search?q=${encodeURIComponent('site:books.apple.com '+full)}`;
-  setTimeout(()=>resolveApple(b),0);
-  return `<div class="fo-wrap">${row('Buy',[L('Amazon / Kindle',`https://www.amazon.com/s?k=${q}&i=digital-text`),`<a class="btn ghost small" id="ablink" href="${esc(apple)}" target="_blank" rel="noopener">Apple Books ${EXT}</a>`,L('Kobo',`https://www.kobo.com/us/en/search?query=${q}`)])}
+  setTimeout(()=>resolveApple(b),0);setTimeout(()=>resolveAsin(b),0);
+  const asin=b.asin||'';
+  const kd=`<a class="btn small" id="kdlink" href="kindle://book?action=open&asin=${esc(asin)}" ${asin?'':'hidden'}>Kindle app ${EXT}</a>`;
+  const amz=`<a class="btn ghost small" id="amzlink" href="${asin?`https://www.amazon.com/dp/${esc(asin)}`:`https://www.amazon.com/s?k=${q}&i=digital-text`}" target="_blank" rel="noopener">${asin?'Amazon':'Amazon / Kindle'} ${EXT}</a>`;
+  return `<div class="fo-wrap">${row('Buy',[kd,amz,`<a class="btn ghost small" id="ablink" href="${esc(apple)}" target="_blank" rel="noopener">Apple Books ${EXT}</a>`,L('Kobo',`https://www.kobo.com/us/en/search?query=${q}`)])}
+  <details class="libset" id="kdset" ${asin?'hidden':''}><summary class="hint">Link the Kindle book so the Kindle app opens straight to it</summary><div style="display:grid;gap:6px;margin-top:8px"><span class="hint">In the Amazon or Kindle app, open this book, tap Share, then Copy Link. Paste it here.</span><input class="inp" id="kdkey" placeholder="Paste Amazon link" autocapitalize="off" autocorrect="off"></div></details>
   ${row('Listen',[L('Audible',`https://www.audible.com/search?keywords=${q}`),L('Spotify',`https://open.spotify.com/search/${q}/audiobooks`)])}
   ${row('Borrow',[L('Libby',libby)])}
   ${lib?'':`<details class="libset"><summary class="hint">Set your library so Libby opens straight to this book</summary><div style="display:grid;gap:6px;margin-top:8px"><span class="hint">In Libby, open your library. The web address ends in its code, like libbyapp.com/library/<b>hcpl</b>. Type that code here.</span><input class="inp" id="libkey" placeholder="Library code" autocapitalize="off" autocorrect="off"></div></details>`}
   ${row('Track',[L('Goodreads',`https://www.goodreads.com/search?q=${q}`),L('StoryGraph',`https://app.thestorygraph.com/browse?search_term=${q}`)])}</div>`;
 }
+const asinTried=new Set();
+function showAsin(b){if(sheetBook!==b.id)return;const k=document.getElementById('kdlink'),a=document.getElementById('amzlink'),d=document.getElementById('kdset');if(k){k.href=`kindle://book?action=open&asin=${b.asin}`;k.hidden=false;}if(a){a.href=`https://www.amazon.com/dp/${b.asin}`;a.firstChild.textContent='Amazon ';}if(d)d.hidden=true;}
+async function resolveAsin(b){
+  if(b.asin||asinTried.has(b.id))return;asinTried.add(b.id);
+  try{const c=new AbortController();setTimeout(()=>c.abort(),7000);
+    const ln=String(b.a||'').split('&')[0].split(',')[0].trim();
+    const r=await fetch(`https://openlibrary.org/search.json?title=${encodeURIComponent(String(b.t).replace(/\s*\(.*\)\s*$/,''))}&author=${encodeURIComponent(ln)}&fields=title,id_amazon&limit=5`,{signal:c.signal});
+    const j=await r.json();const tw=normT(String(b.t).replace(/^(the|a|an)\s+/i,'')).slice(0,18);
+    for(const d of (j.docs||[])){if(!normT(String(d.title||'').replace(/^(the|a|an)\s+/i,'')).startsWith(tw))continue;const hit=(d.id_amazon||[]).map(x=>String(x).trim().toUpperCase()).find(x=>/^B0[A-Z0-9]{8}$/.test(x));if(hit){b.asin=hit;showAsin(b);if(typeof IDB!=='undefined')mark();break;}}
+  }catch(e){}
+}
+function parseAsin(v){v=String(v||'').trim();const m=v.match(/(?:\/dp\/|\/gp\/product\/|\/d\/|[?&]asin=)([A-Z0-9]{10})/i)||v.match(/^([A-Z0-9]{10})$/i);return m?m[1].toUpperCase():'';}
+document.addEventListener('change',e=>{const t=e.target;if(t.id!=='kdkey'||sheetBook==null)return;const b=byId(sheetBook);if(!b)return;const v=t.value.trim();if(!v)return;const id=parseAsin(v);
+  if(!id){toast(/a\.co\//i.test(v)?'Short a.co links hide the book ID. Open it in Safari and copy that full link.':'No Amazon book ID in that link');return;}
+  b.asin=id;showAsin(b);mark();if(typeof IDB==='undefined')setTimeout(()=>{const s=document.getElementById('saveBtn');if(s&&!s.hidden)s.click();},400);toast('Kindle book linked');});
 const appleTried=new Set();
 async function resolveApple(b){
   if(b.ab||appleTried.has(b.id))return;appleTried.add(b.id);
