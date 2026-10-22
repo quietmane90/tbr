@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.2.0';
+const VERSION='1.2.1';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -197,9 +197,10 @@ const sheet=$('sheet');
 function openSheet(html){$('sheetIn').innerHTML=`<div class="grab" aria-hidden="true"></div>`+html;if(!sheet.open){try{sheet.showModal()}catch(e){sheet.setAttribute('open','')}}$('sheetIn').scrollTop=0;}
 function closeSheet(){try{sheet.close()}catch(e){sheet.removeAttribute('open')}sheetBook=null;}
 sheet.addEventListener('click',e=>{if(e.target===sheet)closeSheet();});
+const fmtRate=v=>{v=+v;return (Number.isInteger(v*4)&&!Number.isInteger(v*2))?v.toFixed(2):v.toFixed(1);};
 function rateInput(v,id){
-  let s='';for(let i=0;i<5;i++){const f=Math.max(0,Math.min(1,(+v||0)-i));s+=`<span class="rs"><svg viewBox="0 0 24 24"><defs><clipPath id="c${id}${i}"><rect x="0" y="0" width="${24*f}" height="24"/></clipPath></defs><path d="${STAR}" fill="var(--line)"/><path d="${STAR}" fill="var(--gold)" clip-path="url(#c${id}${i})"/></svg><button class="l" data-act="rate" data-v="${i+.5}" aria-label="${i+.5} stars"></button><button class="r" data-act="rate" data-v="${i+1}" aria-label="${i+1} stars"></button></span>`;}
-  return `<div class="rate"><div class="rate-stars" data-rid="${id}">${s}</div><span class="rate-v">${v!==''&&v!=null?(+v).toFixed(1):'–'}</span>${v!==''&&v!=null?`<button class="link" data-act="rate" data-v="">Clear</button>`:''}</div>`;
+  let s='';for(let i=0;i<5;i++){const f=Math.max(0,Math.min(1,(+v||0)-i));s+=`<span class="rs"><svg viewBox="0 0 24 24"><defs><clipPath id="c${id}${i}"><rect x="0" y="0" width="${24*f}" height="24"/></clipPath></defs><path d="${STAR}" fill="var(--line)"/><path d="${STAR}" fill="var(--gold)" clip-path="url(#c${id}${i})"/></svg>${[.25,.5,.75,1].map((f,k)=>`<button class="q q${k}" data-act="rate" data-v="${i+f}" aria-label="${i+f} stars"></button>`).join('')}</span>`;}
+  return `<div class="rate"><div class="rate-stars" data-rid="${id}">${s}</div><span class="rate-v">${v!==''&&v!=null?fmtRate(v):'–'}</span>${v!==''&&v!=null?`<button class="link" data-act="rate" data-v="">Clear</button>`:''}</div><span class="hint" style="display:block;margin-top:4px">Tap further across a star for quarter, half and three-quarter stars.</span>`;
 }
 let sheetBook=null,pendingRate='';
 function seriesOptions(){return [...bySeries().keys()].filter(s=>s!=='Standalone').sort();}
