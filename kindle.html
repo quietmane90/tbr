@@ -29,9 +29,9 @@ a.alt{color:var(--muted);font-size:.9rem}
 (function(){
   var q=new URLSearchParams(location.search),asin=(q.get('asin')||'').replace(/[^A-Za-z0-9]/g,'').toUpperCase();
   var go=document.getElementById('go'),web=document.getElementById('web');
-  if(!/^[A-Z0-9]{10}$/.test(asin)){document.querySelector('h1').textContent='No book ID';document.getElementById('msg').textContent='This link is missing the Kindle book ID.';go.hidden=true;web.hidden=true;return;}
-  var app='kindle://book?action=open&asin='+asin;
-  go.href=app;web.href='https://read.amazon.com/?asin='+asin;
+  var ok=/^[A-Z0-9]{10}$/.test(asin);
+  var app=ok?'kindle://book?action=open&asin='+asin:'kindle://';
+  go.href=app;if(ok)web.href='https://read.amazon.com/?asin='+asin;else web.hidden=true;
   setTimeout(function(){location.href=app;},150);
 })();
 </script>

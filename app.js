@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.7.7';
+const VERSION='1.7.8';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -842,10 +842,9 @@ function openLinks(b){
   const apple=b.ab||`https://www.google.com/search?q=${encodeURIComponent('site:books.apple.com '+full)}`;
   setTimeout(()=>resolveApple(b),0);setTimeout(()=>resolveAsin(b),0);
   const asin=b.asin||'';
-  const kd=asin?kdA(asin):`<button class="btn ghost small" id="kdlink" data-act="kdlink">Kindle app ${EXT}</button>`;
+  const kd=kdA(asin);
   const amz=`<a class="btn ghost small" id="amzlink" href="${asin?`https://www.amazon.com/dp/${esc(asin)}`:b.amzs?esc(b.amzs):`https://www.amazon.com/s?k=${q}&i=digital-text`}" target="_blank" rel="noopener">Amazon ${EXT}</a>`;
   return `<div class="fo-wrap">${row('Buy',[kd,amz,`<a class="btn ghost small" id="ablink" href="${esc(apple)}" target="_blank" rel="noopener">Apple Books ${EXT}</a>`,L('Kobo',`https://www.kobo.com/us/en/search?query=${q}`)])}
-  <div id="kdset" hidden style="grid-template-columns:minmax(0,1fr);gap:6px;margin:2px 0 6px;min-width:0;max-width:100%"><span class="hint">To open this book straight in Kindle, the app needs its ASIN once. Tap Amazon above, open the book, scroll to Product details, and copy the ASIN (it starts with B0). Paste it here. A full amazon.com link from Safari works too. Short a.co links from the Share button only open Amazon.</span><div style="display:flex;gap:8px"><input class="inp" id="kdkey" placeholder="Paste Amazon link" autocapitalize="off" autocorrect="off" style="flex:1 1 0;width:auto;min-width:0"><button class="btn small" data-act="kdsave" style="flex:none">Save</button></div><span class="hint" id="kdmsg" style="color:var(--accent,#B4532A)"></span></div>
   ${row('Listen',[L('Audible',`https://www.audible.com/search?keywords=${q}`),L('Spotify',`https://open.spotify.com/search/${q}/audiobooks`)])}
   ${row('Borrow',[L('Libby',libby)])}
   ${lib?'':`<details class="libset"><summary class="hint">Set your library so Libby opens straight to this book</summary><div style="display:grid;gap:6px;margin-top:8px"><span class="hint">In Libby, open your library. The web address ends in its code, like libbyapp.com/library/<b>hcpl</b>. Type that code here.</span><input class="inp" id="libkey" placeholder="Library code" autocapitalize="off" autocorrect="off"></div></details>`}
@@ -853,7 +852,7 @@ function openLinks(b){
 }
 const asinTried=new Set();
 const inFrame=(()=>{try{return window.top!==window;}catch(e){return true;}})();
-function kdA(asin){const a=encodeURIComponent(asin);return inFrame?`<a class="btn ghost small" id="kdlink" href="https://quietmane90.github.io/tbr/kindle.html?asin=${a}" target="_blank" rel="noopener">Kindle app ${EXT}</a>`:`<a class="btn ghost small" id="kdlink" href="kindle://book?action=open&asin=${a}">Kindle app ${EXT}</a>`;}
+function kdA(asin){const a=encodeURIComponent(asin||'');const app=a?`kindle://book?action=open&asin=${a}`:'kindle://';return inFrame?`<a class="btn ghost small" id="kdlink" href="https://quietmane90.github.io/tbr/kindle.html${a?'?asin='+a:''}" target="_blank" rel="noopener">Kindle app ${EXT}</a>`:`<a class="btn ghost small" id="kdlink" href="${app}">Kindle app ${EXT}</a>`;}
 function showAsin(b){if(sheetBook!==b.id)return;const k=document.getElementById('kdlink'),a=document.getElementById('amzlink'),d=document.getElementById('kdset');if(k)k.outerHTML=kdA(b.asin);if(a)a.href=`https://www.amazon.com/dp/${b.asin}`;if(d){d.hidden=true;d.style.display='none';}}
 document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-act="kdlink"]');if(!t)return;e.preventDefault();e.stopPropagation();const d=document.getElementById('kdset');if(d){d.hidden=!d.hidden;d.style.display=d.hidden?'none':'grid';if(!d.hidden){const i=document.getElementById('kdkey');i&&i.focus();}}},true);
 async function resolveAsin(b){
