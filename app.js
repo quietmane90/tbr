@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.7.0';
+const VERSION='1.7.1';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -842,17 +842,18 @@ function openLinks(b){
   const apple=b.ab||`https://www.google.com/search?q=${encodeURIComponent('site:books.apple.com '+full)}`;
   setTimeout(()=>resolveApple(b),0);setTimeout(()=>resolveAsin(b),0);
   const asin=b.asin||'';
-  const kd=`<a class="btn small" id="kdlink" href="kindle://book?action=open&asin=${esc(asin)}" ${asin?'':'hidden'}>Kindle app ${EXT}</a>`;
-  const amz=`<a class="btn ghost small" id="amzlink" href="${asin?`https://www.amazon.com/dp/${esc(asin)}`:`https://www.amazon.com/s?k=${q}&i=digital-text`}" target="_blank" rel="noopener">${asin?'Amazon':'Amazon / Kindle'} ${EXT}</a>`;
+  const kd=asin?`<a class="btn small" id="kdlink" href="kindle://book?action=open&asin=${esc(asin)}">Kindle app ${EXT}</a>`:`<button class="btn small" id="kdlink" data-act="kdlink">Kindle app ${EXT}</button>`;
+  const amz=`<a class="btn ghost small" id="amzlink" href="${asin?`https://www.amazon.com/dp/${esc(asin)}`:`https://www.amazon.com/s?k=${q}&i=digital-text`}" target="_blank" rel="noopener">Amazon ${EXT}</a>`;
   return `<div class="fo-wrap">${row('Buy',[kd,amz,`<a class="btn ghost small" id="ablink" href="${esc(apple)}" target="_blank" rel="noopener">Apple Books ${EXT}</a>`,L('Kobo',`https://www.kobo.com/us/en/search?query=${q}`)])}
-  <details class="libset" id="kdset" ${asin?'hidden':''}><summary class="hint">Link the Kindle book so the Kindle app opens straight to it</summary><div style="display:grid;gap:6px;margin-top:8px"><span class="hint">In the Amazon or Kindle app, open this book, tap Share, then Copy Link. Paste it here.</span><input class="inp" id="kdkey" placeholder="Paste Amazon link" autocapitalize="off" autocorrect="off"></div></details>
+  <div id="kdset" hidden style="display:grid;gap:6px;margin:2px 0 6px"><span class="hint">To open this book in Kindle, the app needs its Amazon link once. In the Amazon or Kindle app, open the book, tap Share, then Copy Link, and paste it here.</span><input class="inp" id="kdkey" placeholder="Paste Amazon link" autocapitalize="off" autocorrect="off"></div>
   ${row('Listen',[L('Audible',`https://www.audible.com/search?keywords=${q}`),L('Spotify',`https://open.spotify.com/search/${q}/audiobooks`)])}
   ${row('Borrow',[L('Libby',libby)])}
   ${lib?'':`<details class="libset"><summary class="hint">Set your library so Libby opens straight to this book</summary><div style="display:grid;gap:6px;margin-top:8px"><span class="hint">In Libby, open your library. The web address ends in its code, like libbyapp.com/library/<b>hcpl</b>. Type that code here.</span><input class="inp" id="libkey" placeholder="Library code" autocapitalize="off" autocorrect="off"></div></details>`}
   ${row('Track',[L('Goodreads',`https://www.goodreads.com/search?q=${q}`),L('StoryGraph',`https://app.thestorygraph.com/browse?search_term=${q}`)])}</div>`;
 }
 const asinTried=new Set();
-function showAsin(b){if(sheetBook!==b.id)return;const k=document.getElementById('kdlink'),a=document.getElementById('amzlink'),d=document.getElementById('kdset');if(k){k.href=`kindle://book?action=open&asin=${b.asin}`;k.hidden=false;}if(a){a.href=`https://www.amazon.com/dp/${b.asin}`;a.firstChild.textContent='Amazon ';}if(d)d.hidden=true;}
+function showAsin(b){if(sheetBook!==b.id)return;const k=document.getElementById('kdlink'),a=document.getElementById('amzlink'),d=document.getElementById('kdset');if(k)k.outerHTML=`<a class="btn small" id="kdlink" href="kindle://book?action=open&asin=${b.asin}">Kindle app ${EXT}</a>`;if(a)a.href=`https://www.amazon.com/dp/${b.asin}`;if(d)d.hidden=true;}
+document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-act="kdlink"]');if(!t)return;e.preventDefault();e.stopPropagation();const d=document.getElementById('kdset');if(d){d.hidden=!d.hidden;if(!d.hidden){const i=document.getElementById('kdkey');i&&i.focus();}}},true);
 async function resolveAsin(b){
   if(b.asin||asinTried.has(b.id))return;asinTried.add(b.id);
   try{const c=new AbortController();setTimeout(()=>c.abort(),7000);
