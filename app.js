@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.6.2';
+const VERSION='1.6.3';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -1019,8 +1019,9 @@ function starPath(ctx,cx,cy,R){const r=R*0.47;ctx.beginPath();for(let i=0;i<10;i
 const rateStr=r=>{const v=Math.round((+r)*100)/100;return String(v);};
 function drawStars(ctx,x,y,size,rating){const gap=size*0.16;for(let i=0;i<5;i++){const cx=x+i*(size+gap)+size/2,cy=y+size/2,f=Math.max(0,Math.min(1,rating-i));starPath(ctx,cx,cy,size/2);ctx.fillStyle=C.empty;ctx.fill();if(f>0){ctx.save();ctx.beginPath();ctx.rect(cx-size/2,cy-size/2,size*f,size);ctx.clip();starPath(ctx,cx,cy,size/2);ctx.fillStyle=C.star;ctx.fill();ctx.restore();}}return 5*size+4*gap;}
 function rr(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
-function wrapG(ctx,ws,maxW){const ls=[];let cur='';for(const w of ws){const t=cur?cur+' '+w:w;if(ctx.measureText(t).width<=maxW||!cur)cur=t;else{ls.push(cur);cur=w;}}if(cur)ls.push(cur);return ls;}
-function wrap(ctx,text,maxW,maxL){const ws=String(text).trim().split(/\s+/);let ls=wrapG(ctx,ws,maxW);if(ls.length>1&&ls.length<=maxL){const n=ls.length;let lo=Math.max(...ws.map(w=>ctx.measureText(w).width)),hi=maxW;for(let k=0;k<14&&hi-lo>0.5;k++){const mid=(lo+hi)/2;if(wrapG(ctx,ws,mid).length<=n)hi=mid;else lo=mid;}ls=wrapG(ctx,ws,hi);}if(ls.length>maxL){ls.length=maxL;let l=ls[maxL-1];while(ctx.measureText(l+'…').width>maxW&&l.length>1)l=l.slice(0,-1);ls[maxL-1]=l.trimEnd()+'…';}return ls;}
+function splitW(ctx,ws,maxW){const o=[];for(const w of ws){if(ctx.measureText(w).width<=maxW||w.length<4){o.push(w);continue;}const cs=[...w];let k=2,parts;for(;k<=cs.length;k++){const n=Math.ceil(cs.length/k);parts=[];for(let i=0;i<cs.length;i+=n)parts.push(cs.slice(i,i+n).join(''));if(parts.every((pt,j)=>ctx.measureText(pt+(j<parts.length-1?'-':'')).width<=maxW))break;}parts.forEach((pt,j)=>o.push(pt+(j<parts.length-1?'-':'')));}return o;}
+function wrapG(ctx,ws,maxW){ws=splitW(ctx,ws,maxW);const ls=[];let cur='';for(const w of ws){const t=cur?cur+' '+w:w;if(ctx.measureText(t).width<=maxW||!cur)cur=t;else{ls.push(cur);cur=w;}}if(cur)ls.push(cur);return ls;}
+function wrap(ctx,text,maxW,maxL){const ws=String(text).trim().split(/\s+/);let ls=wrapG(ctx,ws,maxW);if(ls.length>1&&ls.length<=maxL){const n=ls.length;let lo=Math.min(maxW,Math.max(...ws.map(w=>ctx.measureText(w).width))),hi=maxW;for(let k=0;k<14&&hi-lo>0.5;k++){const mid=(lo+hi)/2;if(wrapG(ctx,ws,mid).length<=n)hi=mid;else lo=mid;}ls=wrapG(ctx,ws,hi);}if(ls.length>maxL){ls.length=maxL;let l=ls[maxL-1];while(ctx.measureText(l+'…').width>maxW&&l.length>1)l=l.slice(0,-1);ls[maxL-1]=l.trimEnd()+'…';}return ls;}
 function loadImg(src,cors){return new Promise(res=>{const i=new Image();if(cors)i.crossOrigin='anonymous';i.referrerPolicy='no-referrer';i.onload=()=>res(i);i.onerror=()=>res(null);i.src=src;});}
 let noRemote=false;
 async function imgForCanvas(b){const s=srcFor(b);if(!s)return null;if(b.c==='idb')return loadImg(s,false);if(noRemote)return null;return loadImg(s,true);}
@@ -1031,7 +1032,7 @@ function drawCover(ctx,b,img,x,y,w,h){
   if(img){const s=Math.max(w/img.width,h/img.height),iw=img.width*s,ih=img.height*s;ctx.imageSmoothingQuality='high';ctx.drawImage(img,x+(w-iw)/2,y+(h-ih)/2,iw,ih);}
   else{const [a,z]=hue(b.s+b.t);const g=ctx.createLinearGradient(x,y,x+w*.6,y+h);g.addColorStop(0,a);g.addColorStop(1,z);ctx.fillStyle=g;ctx.fillRect(x,y,w,h);
     ctx.fillStyle='rgba(255,255,255,.16)';ctx.fillRect(x+w*0.07,y,Math.max(2,w*0.012),h);
-    const pad=w*0.14;let fs=w*0.16,ls;for(;fs>8;fs-=1){ctx.font=`800 ${fs}px ${C.df}`;ls=wrap(ctx,b.t,w-pad*1.6,5);if(ls.length*fs*1.05<=h*0.55&&ls.every(l=>ctx.measureText(l).width<=w-pad*1.6))break;}
+    const pad=w*0.14;let fs=w*0.16,ls;for(;fs>8;fs-=1){ctx.font=`800 ${fs}px ${C.df}`;ls=wrap(ctx,b.t,w-pad*1.6,5);if(ls.length*fs*1.05<=h*0.55&&String(b.t).split(/\s+/).every(q=>ctx.measureText(q).width<=w-pad*1.6))break;}
     ctx.fillStyle='#fff';ctx.textAlign='left';ctx.textBaseline='top';ls.forEach((l,i)=>ctx.fillText(l,x+pad,y+h*0.12+i*fs*1.05));
     ctx.fillStyle='rgba(255,255,255,.5)';ctx.fillRect(x+pad,y+h*0.12+ls.length*fs*1.05+fs*0.4,w*0.25,Math.max(2,w*0.012));
     ctx.font=`600 ${Math.max(8,w*0.075)}px ${C.bf}`;ctx.fillStyle='rgba(255,255,255,.8)';ctx.textBaseline='alphabetic';ctx.fillText(wrap(ctx,author(b.a),w-pad*1.6,1)[0]||'',x+pad,y+h*0.9);}
@@ -1043,7 +1044,7 @@ function plan(n,W,H,minText){
   let best=null;
   for(let cols=1;cols<=Math.min(n,12);cols++){
     const rows=Math.ceil(n/cols);const gap=cols<=3?40:cols<=5?26:cols<=8?16:12;
-    const chOf=cw=>{const st=Math.max(8,Math.min(40,cw*0.12));const tf=Math.min(32,Math.max(14,cw*0.12));return cw*1.5+cw*0.08+st+10+(cw>=minText?tf*2.5+6:0);};
+    const chOf=cw=>{const st=Math.max(8,Math.min(40,cw*0.12));const tf=Math.min(32,Math.max(16,cw*0.12)),tl=cw<130?3:2;return cw*1.5+cw*0.08+st+10+(cw>=minText?tf*1.2*tl+8:0);};
     let cw=Math.min(n===1?380:340,(W-gap*(cols-1))/cols);
     while(cw>=54&&rows*chOf(cw)+(rows-1)*gap*1.1>H)cw-=2;
     if(cw<54)continue;
@@ -1090,19 +1091,20 @@ async function render(kind,y,m,size,pg){
   }else lineY=tb+TD+(square?24:32);
   ctx.fillStyle=C.line;ctx.fillRect(P,lineY,W-P*2,2);
   const gy0=lineY+(square?32:44),footY=H-bot-footH,gridH=footY-gy0-(square?24:34);
-  let p=plan(list.length,W-P*2,gridH,150),shown=list,extra=0;
-  if(!p){for(let k=list.length-1;k>=2;k--){p=plan(k,W-P*2,gridH,150);if(p){shown=list.slice(0,k-1);extra=list.length-shown.length;break;}}}
+  let p=plan(list.length,W-P*2,gridH,0),shown=list,extra=0;
+  if(!p){for(let k=list.length-1;k>=2;k--){p=plan(k,W-P*2,gridH,0);if(p){shown=list.slice(0,k-1);extra=list.length-shown.length;break;}}}
   if(!p)return null;
   const imgs=await Promise.all(shown.map(imgForCanvas));
   const slots=shown.length+(extra?1:0);const gy=gy0+Math.max(0,(gridH-p.tot)*0.4);
   const pos=i=>{const r=Math.floor(i/p.cols),c=i%p.cols;const inRow=Math.min(p.cols,slots-r*p.cols);const rowW=inRow*p.cw+(inRow-1)*p.gap;return [P+(W-P*2-rowW)/2+c*(p.cw+p.gap),gy+r*(p.ch+p.gap*1.1)];};
+  let tfsG=Math.round(Math.min(32,Math.max(16,p.cw*0.12)));const tW=p.cw+Math.min(p.gap*0.6,14);for(;tfsG>12;tfsG--){ctx.font=`700 ${tfsG}px ${C.bf}`;if(!shown.some(b=>String(b.t).split(/\s+/).some(w=>ctx.measureText(w).width>tW)))break;}
   shown.forEach((b,i)=>{const [x,yy]=pos(i),ch=p.cw*1.5;drawCover(ctx,b,imgs[i],x,yy,p.cw,ch);
     let ty=yy+ch+p.cw*0.08;
     if(b.r!==''){const rs=rateStr(b.r);let st=p.st,nf;
       for(;;){nf=Math.max(9,Math.round(st*0.92));ctx.font=`800 ${nf}px ${C.bf}`;const tot=st*5.64+st*0.4+ctx.measureText(rs).width;if(tot<=p.cw||st<=6)break;st-=1;}
       const sw=drawStars(ctx,x,ty+(p.st-st)/2,st,+b.r);ctx.fillStyle=C.star;ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(rs,x+sw+st*0.4,ty+p.st/2+1);ctx.textBaseline='alphabetic';}
     ty+=p.st+10;
-    if(p.text){const tfs=Math.round(Math.min(32,Math.max(14,p.cw*0.12)));ctx.fillStyle=C.ink;ctx.font=`700 ${tfs}px ${C.bf}`;ctx.textAlign='left';ctx.textBaseline='top';wrap(ctx,b.t,p.cw,2).forEach((l,k)=>ctx.fillText(l,x,ty+k*tfs*1.2));ctx.textBaseline='alphabetic';}});
+    if(p.text){const tfs=tfsG;ctx.fillStyle=C.ink;ctx.font=`700 ${tfs}px ${C.bf}`;ctx.textAlign='left';ctx.textBaseline='top';wrap(ctx,b.t,tW,p.cw<130?3:2).forEach((l,k)=>ctx.fillText(l,x,ty+k*tfs*1.2));ctx.textBaseline='alphabetic';}});
   if(extra){const [x,yy]=pos(shown.length),ch=p.cw*1.5;ctx.save();rr(ctx,x,yy,p.cw,ch,Math.max(4,p.cw*0.035));ctx.fillStyle=C.bg2;ctx.fill();ctx.strokeStyle=C.line;ctx.lineWidth=2;ctx.stroke();ctx.restore();
     ctx.fillStyle=C.accent;ctx.textAlign='center';ctx.font=`800 ${Math.round(p.cw*0.32)}px ${C.df}`;ctx.fillText('+'+extra,x+p.cw/2,yy+ch/2+p.cw*0.08);
     ctx.fillStyle=C.muted;ctx.font=`700 ${Math.round(p.cw*0.11)}px ${C.bf}`;ctx.fillText('more',x+p.cw/2,yy+ch/2+p.cw*0.24);ctx.textAlign='left';}
