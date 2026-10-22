@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.5.3';
+const VERSION='1.5.4';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -62,7 +62,7 @@ const srcFor=b=>b.c==='idb'?(coverURL.get(b.id)||''):(b.c||'');
 /* ---------- pieces ---------- */
 const STAR='M12 2.5l2.9 6.2 6.6.7-5 4.5 1.4 6.6L12 17.2l-5.9 3.3 1.4-6.6-5-4.5 6.6-.7z';
 function starRow(fill){let s='';for(let i=0;i<5;i++)s+=`<path transform="translate(${i*(24+1.6)} 0)" d="${STAR}" fill="${fill}"/>`;return `<svg viewBox="0 0 128 24" preserveAspectRatio="xMinYMid meet" aria-hidden="true">${s}</svg>`;}
-function stars(r,size){if(r===''||r==null)return '';const w=Math.max(0,Math.min(5,+r))/5*100;return `<span class="stars" style="--s:${size||14}px;--w:${w}%" role="img" aria-label="${r} out of 5 stars">${starRow('var(--line)')}<span class="on">${starRow('var(--gold)')}</span></span>`;}
+function stars(r,size){if(r===''||r==null)return '';const w=Math.max(0,Math.min(5,+r))/5*100;return `<span class="stars" style="--s:${size||14}px;--w:${w}%" role="img" aria-label="${r} out of 5 stars">${starRow('var(--line)')}<span class="on">${starRow('var(--star)')}</span></span>`;}
 function cover(b,cls,gcs){
   const [a,z]=hue(b.s+b.t);const src=srcFor(b);
   return `<div class="cv ${cls||''}" style="background:linear-gradient(160deg,${a},${z})"><div class="gc" style="--gcs:${gcs||'.9rem'}"><div><b>${esc(b.t)}</b><div class="rule"></div></div><i>${esc(author(b.a))}</i></div>${src?`<img src="${esc(src)}" alt="" loading="lazy" referrerpolicy="no-referrer">`:''}</div>`;
@@ -199,7 +199,7 @@ function closeSheet(){try{sheet.close()}catch(e){sheet.removeAttribute('open')}s
 sheet.addEventListener('click',e=>{if(e.target===sheet)closeSheet();});
 const fmtRate=v=>{v=+v;return (Number.isInteger(v*4)&&!Number.isInteger(v*2))?v.toFixed(2):v.toFixed(1);};
 function rateInput(v,id){
-  let s='';for(let i=0;i<5;i++){const f=Math.max(0,Math.min(1,(+v||0)-i));s+=`<span class="rs"><svg viewBox="0 0 24 24"><defs><clipPath id="c${id}${i}"><rect x="0" y="0" width="${24*f}" height="24"/></clipPath></defs><path d="${STAR}" fill="var(--line)"/><path d="${STAR}" fill="var(--gold)" clip-path="url(#c${id}${i})"/></svg>${[.25,.5,.75,1].map((f,k)=>`<button class="q q${k}" data-act="rate" data-v="${i+f}" aria-label="${i+f} stars"></button>`).join('')}</span>`;}
+  let s='';for(let i=0;i<5;i++){const f=Math.max(0,Math.min(1,(+v||0)-i));s+=`<span class="rs"><svg viewBox="0 0 24 24"><defs><clipPath id="c${id}${i}"><rect x="0" y="0" width="${24*f}" height="24"/></clipPath></defs><path d="${STAR}" fill="var(--line)"/><path d="${STAR}" fill="var(--star)" clip-path="url(#c${id}${i})"/></svg>${[.25,.5,.75,1].map((f,k)=>`<button class="q q${k}" data-act="rate" data-v="${i+f}" aria-label="${i+f} stars"></button>`).join('')}</span>`;}
   return `<div class="rate"><div class="rate-stars" data-rid="${id}">${s}</div><span class="rate-v">${v!==''&&v!=null?fmtRate(v):'–'}</span>${v!==''&&v!=null?`<button class="link" data-act="rate" data-v="">Clear</button>`:''}</div><span class="hint" style="display:block;margin-top:4px">Tap further across a star for quarter, half and three-quarter stars.</span>`;
 }
 let sheetBook=null,pendingRate='';
@@ -998,11 +998,11 @@ document.addEventListener('change',async e=>{
 $('q').addEventListener('input',e=>{ui.q=e.target.value.trim();renderLib();});
 
 /* ---------- roundup image ---------- */
-const C={bg:'#0E1117',bg2:'#161B25',ink:'#F1F2F5',muted:'#9AA1AF',faint:'#5B6271',gold:'#EDB54E',empty:'#2B313E',line:'#262C38'};
+const C={star:'#FFA41C',bg:'#0E1117',bg2:'#161B25',ink:'#F1F2F5',muted:'#9AA1AF',faint:'#5B6271',gold:'#EDB54E',empty:'#2B313E',line:'#262C38'};
 let lastImg=null,lastImgs=[],lastKind='month';
 function starPath(ctx,cx,cy,R){const r=R*0.47;ctx.beginPath();for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,rr=i%2?r:R;ctx.lineTo(cx+rr*Math.cos(a),cy+rr*Math.sin(a));}ctx.closePath();}
 const rateStr=r=>{const v=Math.round((+r)*100)/100;return String(v);};
-function drawStars(ctx,x,y,size,rating){const gap=size*0.16;for(let i=0;i<5;i++){const cx=x+i*(size+gap)+size/2,cy=y+size/2,f=Math.max(0,Math.min(1,rating-i));starPath(ctx,cx,cy,size/2);ctx.fillStyle=C.empty;ctx.fill();if(f>0){ctx.save();ctx.beginPath();ctx.rect(cx-size/2,cy-size/2,size*f,size);ctx.clip();starPath(ctx,cx,cy,size/2);ctx.fillStyle=C.gold;ctx.fill();ctx.restore();}}return 5*size+4*gap;}
+function drawStars(ctx,x,y,size,rating){const gap=size*0.16;for(let i=0;i<5;i++){const cx=x+i*(size+gap)+size/2,cy=y+size/2,f=Math.max(0,Math.min(1,rating-i));starPath(ctx,cx,cy,size/2);ctx.fillStyle=C.empty;ctx.fill();if(f>0){ctx.save();ctx.beginPath();ctx.rect(cx-size/2,cy-size/2,size*f,size);ctx.clip();starPath(ctx,cx,cy,size/2);ctx.fillStyle=C.star;ctx.fill();ctx.restore();}}return 5*size+4*gap;}
 function rr(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
 function wrap(ctx,text,maxW,maxL){const ws=String(text).split(/\s+/),ls=[];let cur='';for(const w of ws){const t=cur?cur+' '+w:w;if(ctx.measureText(t).width<=maxW||!cur)cur=t;else{ls.push(cur);cur=w;}}if(cur)ls.push(cur);if(ls.length>maxL){ls.length=maxL;let l=ls[maxL-1];while(ctx.measureText(l+'…').width>maxW&&l.length>1)l=l.slice(0,-1);ls[maxL-1]=l.trimEnd()+'…';}return ls;}
 function loadImg(src,cors){return new Promise(res=>{const i=new Image();if(cors)i.crossOrigin='anonymous';i.referrerPolicy='no-referrer';i.onload=()=>res(i);i.onerror=()=>res(null);i.src=src;});}
@@ -1078,7 +1078,7 @@ async function render(kind,y,m,size,pg){
     let ty=yy+ch+p.cw*0.08;
     if(b.r!==''){const rs=rateStr(b.r);let st=p.st,nf;
       for(;;){nf=Math.max(9,Math.round(st*0.92));ctx.font=`800 ${nf}px Manrope, sans-serif`;const tot=st*5.64+st*0.4+ctx.measureText(rs).width;if(tot<=p.cw||st<=6)break;st-=1;}
-      const sw=drawStars(ctx,x,ty+(p.st-st)/2,st,+b.r);ctx.fillStyle=C.gold;ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(rs,x+sw+st*0.4,ty+p.st/2+1);ctx.textBaseline='alphabetic';}
+      const sw=drawStars(ctx,x,ty+(p.st-st)/2,st,+b.r);ctx.fillStyle=C.star;ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(rs,x+sw+st*0.4,ty+p.st/2+1);ctx.textBaseline='alphabetic';}
     ty+=p.st+10;
     if(p.text){const tfs=Math.round(Math.min(32,Math.max(14,p.cw*0.12)));ctx.fillStyle=C.ink;ctx.font=`700 ${tfs}px Manrope, sans-serif`;ctx.textAlign='left';ctx.textBaseline='top';wrap(ctx,b.t,p.cw,2).forEach((l,k)=>ctx.fillText(l,x,ty+k*tfs*1.2));ctx.textBaseline='alphabetic';}});
   if(extra){const [x,yy]=pos(shown.length),ch=p.cw*1.5;ctx.save();rr(ctx,x,yy,p.cw,ch,Math.max(4,p.cw*0.035));ctx.fillStyle=C.bg2;ctx.fill();ctx.strokeStyle=C.line;ctx.lineWidth=2;ctx.stroke();ctx.restore();

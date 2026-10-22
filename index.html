@@ -22,7 +22,7 @@
 :root{
   --bg:#F2F3F6; --bg2:#E8EAEF; --surface:#FFFFFF; --raise:#F7F8FA; --line:#DFE2E8;
   --fg:#141720; --muted:#5D6472; --faint:#8C93A1;
-  --gold:#B07811; --gold-ink:#FFFFFF; --gold-soft:#F5E7C8;
+  --gold:#B07811; --star:#E87400; --gold-ink:#FFFFFF; --gold-soft:#F5E7C8;
   --read:#24865A; --read-soft:#DDF1E6; --reading:#3159C9; --reading-soft:#E1E8FB; --dnf:#B4413F; --dnf-soft:#F7E0DF;
   --shadow:0 1px 2px rgba(20,23,32,.06),0 8px 24px rgba(20,23,32,.08);
   --display:"Bricolage Grotesque","Avenir Next",system-ui,sans-serif;
@@ -32,13 +32,13 @@
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#0F1218; --bg2:#151922; --surface:#181C26; --raise:#1F2430; --line:#2A303D;
   --fg:#EDEFF3; --muted:#A0A7B5; --faint:#6E7585;
-  --gold:#EDB54E; --gold-ink:#1A1408; --gold-soft:#3A2E16;
+  --gold:#EDB54E; --star:#FFA41C; --gold-ink:#1A1408; --gold-soft:#3A2E16;
   --read:#69C796; --read-soft:#16301F; --reading:#8EAEFF; --reading-soft:#1B2647; --dnf:#EF8784; --dnf-soft:#3A1C1C;
   --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35); color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0F1218; --bg2:#151922; --surface:#181C26; --raise:#1F2430; --line:#2A303D;
   --fg:#EDEFF3; --muted:#A0A7B5; --faint:#6E7585;
-  --gold:#EDB54E; --gold-ink:#1A1408; --gold-soft:#3A2E16;
+  --gold:#EDB54E; --star:#FFA41C; --gold-ink:#1A1408; --gold-soft:#3A2E16;
   --read:#69C796; --read-soft:#16301F; --reading:#8EAEFF; --reading-soft:#1B2647; --dnf:#EF8784; --dnf-soft:#3A1C1C;
   --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35); color-scheme:dark}
 *{box-sizing:border-box}
@@ -151,7 +151,7 @@ h2{font-size:1.35rem;font-weight:800}
 @media (min-width:900px){.grid{grid-template-columns:repeat(6,minmax(0,1fr))}}
 .gitem{border:0;background:none;padding:0;text-align:left;cursor:pointer;display:grid;gap:6px;min-width:0}
 .gitem .t{font-weight:700;font-size:.82rem;line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.gitem .m{font-size:.72rem;color:var(--muted)}.rrow{display:flex;flex-wrap:nowrap;align-items:center;gap:4px;min-width:0}.rrow .stars{--s:clamp(11px,3.4vw,16px)!important}.rrow b{white-space:nowrap}.rrow b{font-size:.8rem;font-weight:800;color:var(--gold);font-variant-numeric:tabular-nums;line-height:1}
+.gitem .m{font-size:.72rem;color:var(--muted)}.rrow{display:flex;flex-wrap:nowrap;align-items:center;gap:4px;min-width:0}.rrow .stars{--s:clamp(11px,3.4vw,16px)!important}.rrow b{white-space:nowrap}.rrow b{font-size:.8rem;font-weight:800;color:var(--star);font-variant-numeric:tabular-nums;line-height:1}
 .emptybox{background:var(--surface);border-radius:var(--r);padding:28px 20px;text-align:center;color:var(--muted);box-shadow:var(--shadow)}
 
 /* library */
