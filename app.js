@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.7.1';
+const VERSION='1.7.2';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -845,7 +845,7 @@ function openLinks(b){
   const kd=asin?`<a class="btn small" id="kdlink" href="kindle://book?action=open&asin=${esc(asin)}">Kindle app ${EXT}</a>`:`<button class="btn small" id="kdlink" data-act="kdlink">Kindle app ${EXT}</button>`;
   const amz=`<a class="btn ghost small" id="amzlink" href="${asin?`https://www.amazon.com/dp/${esc(asin)}`:`https://www.amazon.com/s?k=${q}&i=digital-text`}" target="_blank" rel="noopener">Amazon ${EXT}</a>`;
   return `<div class="fo-wrap">${row('Buy',[kd,amz,`<a class="btn ghost small" id="ablink" href="${esc(apple)}" target="_blank" rel="noopener">Apple Books ${EXT}</a>`,L('Kobo',`https://www.kobo.com/us/en/search?query=${q}`)])}
-  <div id="kdset" hidden style="display:grid;gap:6px;margin:2px 0 6px"><span class="hint">To open this book in Kindle, the app needs its Amazon link once. In the Amazon or Kindle app, open the book, tap Share, then Copy Link, and paste it here.</span><input class="inp" id="kdkey" placeholder="Paste Amazon link" autocapitalize="off" autocorrect="off"></div>
+  <div id="kdset" hidden style="display:grid;gap:6px;margin:2px 0 6px"><span class="hint">To open this book in Kindle, the app needs its Amazon link once. Tap Amazon above, open the book, tap Share, then Copy Link, and paste it here. Kindle+ books use the same link as the store page.</span><input class="inp" id="kdkey" placeholder="Paste Amazon link" autocapitalize="off" autocorrect="off"></div>
   ${row('Listen',[L('Audible',`https://www.audible.com/search?keywords=${q}`),L('Spotify',`https://open.spotify.com/search/${q}/audiobooks`)])}
   ${row('Borrow',[L('Libby',libby)])}
   ${lib?'':`<details class="libset"><summary class="hint">Set your library so Libby opens straight to this book</summary><div style="display:grid;gap:6px;margin-top:8px"><span class="hint">In Libby, open your library. The web address ends in its code, like libbyapp.com/library/<b>hcpl</b>. Type that code here.</span><input class="inp" id="libkey" placeholder="Library code" autocapitalize="off" autocorrect="off"></div></details>`}
