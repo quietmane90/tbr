@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.9.2';
+const VERSION='1.9.3';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -164,7 +164,7 @@ function renderLog(){
   const list=period(ui.ly,ui.lm);
   const label=ui.lm?`${FULL[MI(ui.lm)]} ${ui.ly}`:ui.ly;
   $('logsum').innerHTML=`<div style="display:grid;gap:2px"><span class="big">${esc(label)}</span><span class="muted" style="font-size:.85rem">${list.length} book${list.length===1?'':'s'} · ${avg(list).toFixed(1)} average · ${list.filter(b=>+b.r===5).length} five-star</span></div><button class="btn gold small" data-act="share" ${list.length?'':'disabled'}>${ICON.share}Share ${ui.lm?'month':'year'}</button>`;
-  $('loggrid').innerHTML=list.length?`${ui.lm&&list.length>1?'<p class="draghint" style="margin:0 0 12px">Hold and drag to set the order you read them.</p>':''}<div class="grid">${list.map(b=>`<button class="gitem" data-act="book" data-id="${b.id}" ${ui.lm?`data-drag="l" data-slot="${b.id}"`:`data-drag="b"`}>${cover(b,'','.72rem')}${b.r!==''?`<span class="rrow">${stars(b.r,15)}<b>${rateStr(b.r)}</b></span>`:''}<span class="t">${esc(b.t)}</span><span class="m">${b.s==='Standalone'?esc(author(b.a)):esc(b.s)+' '+fmtN(b.n)}${ui.lm?'':' · '+b.m}</span></button>`).join('')}</div>`:`<div class="emptybox">No finished books logged here yet. When you finish a book, tap Finished it on the Reading tab.</div>`;
+  $('loggrid').innerHTML=list.length?`${list.length>1?`<p class="draghint" style="margin:0 0 12px">Hold and drag to set the order you read them${ui.lm?'':' within each month'}.</p>`:''}<div class="grid">${list.map(b=>`<button class="gitem" data-act="book" data-id="${b.id}" data-drag="l" data-slot="${b.id}">${cover(b,'','.72rem')}${b.r!==''?`<span class="rrow">${stars(b.r,15)}<b>${rateStr(b.r)}</b></span>`:''}<span class="t">${esc(b.t)}</span><span class="m">${b.s==='Standalone'?esc(author(b.a)):esc(b.s)+' '+fmtN(b.n)}${ui.lm?'':' · '+b.m}</span></button>`).join('')}</div>`:`<div class="emptybox">No finished books logged here yet. When you finish a book, tap Finished it on the Reading tab.</div>`;
 }
 
 /* ---------- library ---------- */
@@ -946,7 +946,7 @@ function dragEnd(commit){
     DR.skip=true;setTimeout(()=>DR.skip=false,400);const T=DR.target;
     if(commit&&T){
       if(DR.kind==='q'){const from=+DR.src.dataset.slot;const key=D.queue[from];qInsert(key,T.slot+(T.after?1:0));mark();renderAll();}
-      else if(DR.kind==='l'){const list=period(ui.ly,ui.lm);const id=+DR.src.dataset.slot;const mv=list.find(b=>b.id===id);const rest=list.filter(b=>b.id!==id);let k=rest.findIndex(b=>b.id===T.slot);if(k<0)k=rest.length;if(T.after)k++;rest.splice(k,0,mv);rest.forEach((b,i)=>b.lo=i);mark();renderAll();toast('Order updated');}
+      else if(DR.kind==='l'){const id=+DR.src.dataset.slot;const mv=byId(id);const tg=byId(T.slot);if(!ui.lm&&tg&&mv&&tg.m!==mv.m){toast(`That one is in ${FULL[MI(tg.m)]}. Change the finished date to move it there.`);}else{const list=period(ui.ly,ui.lm||mv.m);const rest=list.filter(b=>b.id!==id);let k=rest.findIndex(b=>b.id===T.slot);if(k<0)k=rest.length;if(T.after)k++;rest.splice(k,0,mv);rest.forEach((b,i)=>b.lo=i);mark();renderAll();toast('Order updated');}}
       else{let key;if(DR.kind==='s')key=DR.src.dataset.s;else key=qKey(byId(+DR.src.dataset.id));
         if(key){const to=T.r?T.slot+(T.after?1:0):D.queue.length;qInsert(key,to);mark();renderAll();toast(`Added to Up next at #${qPos(D.queue.indexOf(key))||D.queue.indexOf(key)+1}`);}}
     }
