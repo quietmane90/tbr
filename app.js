@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.9.1';
+const VERSION='1.9.2';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -211,9 +211,9 @@ function bookSheet(id){
   openSheet(`<div class="sh-head">${cover(b,'','.62rem')}<div style="display:grid;gap:4px;min-width:0"><span class="kicker">${esc(b.s==='Standalone'?'Standalone':b.s+' '+fmtN(b.n))}</span><h3>${esc(b.t)}</h3><span class="muted">${esc(author(b.a))}</span>${b.av==='No'&&b.st!=='Read'&&b.no?`<span class="chip-s wait" style="justify-self:start">${esc(b.no)}</span>`:''}</div>${X}</div>
     <div class="field"><span class="lab">Status</span>${seg('st',[['Unread','To read'],['Reading','Reading'],['Read','Read'],['DNF','DNF']],'Status')}</div>
     ${b.st==='Read'?`<div class="field"><span class="lab">Your rating</span>${rateInput(b.r,'b'+b.id)}</div>
-    <div class="row2"><div class="field"><label for="fds">Started</label><input class="inp" type="date" id="fds" data-act="setdate" data-f="ds" value="${esc(b.ds||'')}"></div><div class="field"><label for="fdf">Finished</label><input class="inp" type="date" id="fdf" data-act="setdate" data-f="df" value="${esc(b.df||'')}"></div></div>
+    <div class="row2"><div class="field"><label for="fds">Started</label><span id="fds"></span>${dpBtn('data-f="ds"',b.ds)}</div><div class="field"><label for="fdf">Finished</label><span id="fdf"></span>${dpBtn('data-f="df"',b.df)}</div></div>
     <div class="row2"><div class="field"><label for="fm">Month finished</label><select class="inp" id="fm" data-act="setsel" data-f="m"><option value="">Month</option>${MONTHS.map((m,i)=>`<option value="${m}"${b.m===m?' selected':''}>${FULL[i]}</option>`).join('')}</select></div><div class="field"><label for="fy">Year</label><select class="inp" id="fy" data-act="setsel" data-f="y"><option value="">Year</option>${years.map(y=>`<option${b.y===y?' selected':''}>${y}</option>`).join('')}</select></div></div>`:''}
-    ${b.st==='Reading'?`<div class="field"><label for="fds2">Started</label><input class="inp" type="date" id="fds2" data-act="setdate" data-f="ds" value="${esc(b.ds||'')}"></div>`:''}
+    ${b.st==='Reading'?`<div class="field"><label for="fds2">Started</label><span id="fds2"></span>${dpBtn('data-f="ds"',b.ds)}</div>`:''}
     <div class="field"><span class="lab">Up next</span><div class="actions">${qi>-1?`<span class="muted" style="align-self:center;font-weight:700">${b.s==='Standalone'?'This book':'This series'} is #${qPos(qi)||qi+1}</span>${qi>0?`<button class="btn ghost small" data-act="qtop" data-id="${b.id}">Move to top</button>`:''}<button class="btn ghost small" data-act="qremove" data-id="${b.id}">Remove</button>`:`<button class="btn ghost small" data-act="qadd" data-id="${b.id}">Add to Up next</button><button class="btn ghost small" data-act="qtop" data-id="${b.id}">Read this next</button>`}${b.st==='Unread'?`<button class="btn gold small" data-act="start" data-id="${b.id}">Start reading</button>`:''}</div></div>
     <div class="field"><span class="lab">Find on</span>${openLinks(b)}</div>
     <div class="field"><span class="lab">Priority</span>${seg('p',[['High','High'],['Medium','Medium'],['Test First','Sample'],['Low','Low']],'Priority')}</div>
@@ -331,7 +331,7 @@ function showConfirm(c){
     <div class="field"><span class="lab">Priority</span>${segH('p',PRIO)}</div>
     <div class="field"><span class="lab">Status</span>${segH('st',[['Unread','To read'],['Reading','Reading'],['Read','Read'],['DNF','DNF']])}</div>
     <div class="field" id="a-ratef" hidden><span class="lab">Rating</span><div id="a-rate">${rateInput(addState.r,'a')}</div></div>
-    <div class="field" id="a-dff" hidden><label for="a-df">Finished</label><input class="inp" type="date" id="a-df" value="${TODAY}"></div>
+    <div class="field" id="a-dff" hidden><label for="a-df">Finished</label><input type="hidden" id="a-df" value="${TODAY}">${dpBtn('data-for="a-df"',TODAY)}</div>
     <details class="field edit"><summary class="lab">Fix the details</summary><div style="display:grid;gap:12px;margin-top:10px">
       <div class="field"><label for="c-t">Title</label><input class="inp" id="c-t" value="${esc(c.t)}"></div>
       <div class="field"><label for="c-a">Author</label><input class="inp" id="c-a" value="${esc(author(toLastFirst(c.a)))}"></div>
@@ -831,6 +831,31 @@ document.addEventListener('click',e=>{
   else if(a==='impall'){const on=t.dataset.v==='1';IMP.items.forEach(it=>{if(!it.have)it.on=on;});document.querySelectorAll('.imp-cb:not(:disabled)').forEach(c=>c.checked=on);}
 });
 
+/* ---------- date picker: nothing is chosen until you tap a day ---------- */
+const DPM=['January','February','March','April','May','June','July','August','September','October','November','December'];
+const dpISO=(y,m,d)=>`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+const dpLabel=v=>{if(!v)return 'Pick a date';const [y,m,d]=v.split('-');return `${DPM[+m-1].slice(0,3)} ${+d}, ${y}`;};
+const dpBtn=(attrs,v)=>`<button type="button" class="inp datebtn${v?'':' empty'}" data-act="pickdate" ${attrs} data-v="${v||''}">${dpLabel(v)}</button>`;
+let DP=null;
+function dpOpen(btn){if(DP&&DP.btn===btn){dpClose();return;}const v=btn.dataset.v||'';const d=v?new Date(v+'T12:00:00'):new Date();DP={btn,y:d.getFullYear(),m:d.getMonth(),v};dpRender();}
+function dpClose(){document.querySelectorAll('.dpick').forEach(e=>e.remove());if(DP)DP.btn.setAttribute('aria-expanded','false');DP=null;}
+function dpRender(){document.querySelectorAll('.dpick').forEach(e=>e.remove());if(!DP)return;const {y,m,v}=DP,today=new Date(),tISO=dpISO(today.getFullYear(),today.getMonth(),today.getDate());
+  const first=new Date(y,m,1).getDay(),days=new Date(y,m+1,0).getDate();let cells='';
+  for(let i=0;i<first;i++)cells+='<span></span>';
+  for(let d=1;d<=days;d++){const iso=dpISO(y,m,d);cells+=`<button type="button" data-act="dpday" data-d="${iso}" class="${iso===v?'sel':''}${iso===tISO?' tdy':''}">${d}</button>`;}
+  const yrs=[];for(let k=today.getFullYear()+1;k>=today.getFullYear()-15;k--)yrs.push(k);
+  const el=document.createElement('div');el.className='dpick';el.setAttribute('role','dialog');el.setAttribute('aria-label','Choose a date');
+  el.innerHTML=`<div class="dp-h"><button type="button" data-act="dpnav" data-n="-1" aria-label="Previous month">‹</button><span class="dp-sel"><select data-act="dpm" aria-label="Month">${DPM.map((n,i)=>`<option value="${i}" ${i===m?'selected':''}>${n}</option>`).join('')}</select><select data-act="dpy" aria-label="Year">${yrs.map(k=>`<option ${k===y?'selected':''}>${k}</option>`).join('')}</select></span><button type="button" data-act="dpnav" data-n="1" aria-label="Next month">›</button></div>
+  <div class="dp-w">${['S','M','T','W','T','F','S'].map(x=>`<span>${x}</span>`).join('')}</div><div class="dp-g">${cells}</div>
+  <div class="dp-f"><button type="button" class="link" data-act="dpclear">Clear</button><button type="button" class="link" data-act="dptoday">Today</button><button type="button" class="link" data-act="dpclose">Cancel</button></div>`;
+  const host=DP.btn.closest('.row2')||DP.btn.closest('.field');host.after(el);DP.btn.setAttribute('aria-expanded','true');}
+function dpCommit(val){if(!DP)return;const btn=DP.btn;btn.dataset.v=val;btn.textContent=dpLabel(val);btn.classList.toggle('empty',!val);
+  if(btn.dataset.for){const h=document.getElementById(btn.dataset.for);if(h)h.value=val;dpClose();return;}
+  const f=btn.dataset.f;dpClose();if(!f||sheetBook==null)return;const b=byId(sheetBook);if(!b)return;b[f]=val;if(f==='df'&&val){const d=fromISO(val);b.m=d.m;b.y=d.y;}mark();renderAll();bookSheet(sheetBook);}
+document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-act^="dp"],[data-act="pickdate"]');if(!t)return;const a=t.dataset.act;if(a==='dpm'||a==='dpy')return;e.preventDefault();e.stopPropagation();
+  if(a==='pickdate')dpOpen(t);else if(!DP)return;else if(a==='dpnav'){DP.m+=+t.dataset.n;if(DP.m<0){DP.m=11;DP.y--;}if(DP.m>11){DP.m=0;DP.y++;}dpRender();}
+  else if(a==='dpday')dpCommit(t.dataset.d);else if(a==='dpclear')dpCommit('');else if(a==='dptoday'){const n=new Date();dpCommit(dpISO(n.getFullYear(),n.getMonth(),n.getDate()));}else if(a==='dpclose')dpClose();},true);
+document.addEventListener('change',e=>{const t=e.target;if(!DP||!t.dataset)return;if(t.dataset.act==='dpm'){DP.m=+t.value;dpRender();}else if(t.dataset.act==='dpy'){DP.y=+t.value;dpRender();}},true);
 /* ---------- find on (shared) ---------- */
 const EXT='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M9 7h8v8"/></svg>';
 function openLinks(b){

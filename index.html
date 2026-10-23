@@ -305,6 +305,14 @@ details.edit>summary::after{content:" +";color:var(--gold)}details.edit[open]>su
 input.inp[type="date"]{-webkit-appearance:none;appearance:none;min-width:0;max-width:100%;display:block;min-height:46px;text-align:left}
 input.inp[type="date"]::-webkit-date-and-time-value{text-align:left}
 
+.datebtn{text-align:left;cursor:pointer;min-height:46px;font-weight:600}.datebtn.empty{color:var(--faint);font-weight:500}.datebtn[aria-expanded="true"]{border-color:var(--gold)}
+.dpick{border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:var(--shadow);padding:12px;display:grid;gap:8px}
+.dp-h{display:grid;grid-template-columns:40px 1fr 40px;align-items:center;gap:6px}.dp-h>button{border:0;background:var(--raise);border-radius:10px;height:40px;font-size:1.4rem;font-weight:700;cursor:pointer;color:var(--fg)}
+.dp-sel{display:flex;gap:6px;justify-content:center;min-width:0}.dp-sel select{font:inherit;font-weight:700;border:1px solid var(--line);border-radius:10px;background:var(--raise);color:var(--fg);padding:8px 6px;min-width:0}
+.dp-w,.dp-g{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;text-align:center}.dp-w span{font-size:.7rem;font-weight:800;color:var(--faint)}
+.dp-g button{border:0;background:none;aspect-ratio:1;border-radius:50%;font:inherit;font-weight:700;font-size:.92rem;color:var(--fg);cursor:pointer;font-variant-numeric:tabular-nums}
+.dp-g button.tdy{box-shadow:inset 0 0 0 1.5px var(--gold)}.dp-g button.sel{background:var(--gold);color:var(--gold-ink)}
+.dp-f{display:flex;justify-content:space-between}
 /* phone fit: no sideways drift, no iOS focus zoom */
 html,body{max-width:100%;overflow-x:clip;overscroll-behavior-x:none}
 @media (pointer:coarse){input,select,textarea{font-size:16px!important}}
