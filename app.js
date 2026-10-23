@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.8.1';
+const VERSION='1.9.0';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -46,7 +46,7 @@ async function askPersist(){try{if(navigator.storage&&navigator.storage.persist&
 const ui={tab:'home',ly:'',lm:undefined,st:'Unread',prio:'',q:'',open:{},size:'4x5',hideInstall:false};
 try{const s=JSON.parse(localStorage.getItem('tbr-ui')||'null');if(s)Object.assign(ui,s,{q:''});}catch(e){}
 const hsh=(location.hash||'').slice(1);if(['home','log','library'].includes(hsh))ui.tab=hsh;
-function saveUi(){try{localStorage.setItem('tbr-ui',JSON.stringify({tab:ui.tab,ly:ui.ly,lm:ui.lm,st:ui.st,prio:ui.prio,open:ui.open,size:ui.size,rg:ui.rg,split:ui.split,theme:ui.theme,font:ui.font,hideInstall:ui.hideInstall}))}catch(e){}}
+function saveUi(){try{localStorage.setItem('tbr-ui',JSON.stringify({tab:ui.tab,ly:ui.ly,lm:ui.lm,st:ui.st,prio:ui.prio,open:ui.open,size:ui.size,rg:ui.rg,split:ui.split,theme:ui.theme,font:ui.font,mock:ui.mock,hideInstall:ui.hideInstall}))}catch(e){}}
 
 const byId=id=>books.find(b=>b.id===id);
 const nextId=()=>Math.max(0,...books.map(x=>x.id))+1;
@@ -1189,6 +1189,55 @@ async function renderPages(kind){
 document.addEventListener('click',e=>{const t=e.target.closest('[data-act="font"]');if(t){ui.font=t.dataset.v;saveUi();makeShare(lastKind);}});
 document.addEventListener('click',e=>{const t=e.target.closest('[data-act="theme"]');if(t){ui.theme=t.dataset.v;saveUi();makeShare(lastKind);}});
 document.addEventListener('click',e=>{const t=e.target.closest('[data-act="split"]');if(t){ui.split=t.dataset.v;saveUi();makeShare(lastKind);}});
+/* ---------- in-app preview (generic app layout drawn over a copy; never saved) ---------- */
+function mkIco(ctx,kind,x,y,s,col){ctx.save();ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=Math.max(2,s*0.09);ctx.lineJoin='round';ctx.lineCap='round';ctx.beginPath();
+  if(kind==='heart'){ctx.moveTo(x,y+s*0.35);ctx.bezierCurveTo(x-s*0.6,y-s*0.05,x-s*0.35,y-s*0.5,x,y-s*0.2);ctx.bezierCurveTo(x+s*0.35,y-s*0.5,x+s*0.6,y-s*0.05,x,y+s*0.35);ctx.stroke();}
+  else if(kind==='bubble'){ctx.arc(x,y,s*0.4,Math.PI*0.75,Math.PI*0.65+Math.PI*2);ctx.lineTo(x-s*0.42,y+s*0.42);ctx.closePath();ctx.stroke();}
+  else if(kind==='plane'){ctx.moveTo(x-s*0.42,y-s*0.3);ctx.lineTo(x+s*0.45,y-s*0.38);ctx.lineTo(x+s*0.05,y+s*0.42);ctx.lineTo(x-s*0.05,y-s*0.02);ctx.closePath();ctx.stroke();}
+  else if(kind==='mark'){ctx.moveTo(x-s*0.3,y-s*0.42);ctx.lineTo(x+s*0.3,y-s*0.42);ctx.lineTo(x+s*0.3,y+s*0.42);ctx.lineTo(x,y+s*0.18);ctx.lineTo(x-s*0.3,y+s*0.42);ctx.closePath();ctx.stroke();}
+  else if(kind==='dots'){for(const d of[-1,0,1]){ctx.moveTo(x+d*s*0.3+s*0.06,y);ctx.arc(x+d*s*0.3,y,s*0.06,0,Math.PI*2);}ctx.fill();}
+  else if(kind==='share'){ctx.moveTo(x-s*0.4,y+s*0.3);ctx.quadraticCurveTo(x-s*0.3,y-s*0.15,x+s*0.15,y-s*0.15);ctx.lineTo(x+s*0.15,y-s*0.4);ctx.lineTo(x+s*0.45,y-s*0.05);ctx.lineTo(x+s*0.15,y+s*0.28);ctx.lineTo(x+s*0.15,y+s*0.05);ctx.quadraticCurveTo(x-s*0.2,y+s*0.02,x-s*0.4,y+s*0.3);ctx.stroke();}
+  else if(kind==='x'){ctx.moveTo(x-s*0.35,y-s*0.35);ctx.lineTo(x+s*0.35,y+s*0.35);ctx.moveTo(x+s*0.35,y-s*0.35);ctx.lineTo(x-s*0.35,y+s*0.35);ctx.stroke();}
+  else if(kind==='cam'){ctx.roundRect(x-s*0.45,y-s*0.3,s*0.9,s*0.65,s*0.12);ctx.stroke();ctx.beginPath();ctx.arc(x,y+s*0.03,s*0.18,0,Math.PI*2);ctx.stroke();}
+  ctx.restore();}
+function mkShade(ctx,W,y0,y1,a){const g=ctx.createLinearGradient(0,y0,0,y1);g.addColorStop(0,`rgba(0,0,0,${y0<y1?a:0})`);g.addColorStop(1,`rgba(0,0,0,${y0<y1?0:a})`);ctx.fillStyle=g;ctx.fillRect(0,Math.min(y0,y1),W,Math.abs(y1-y0));}
+function mkText(ctx,t,x,y,sz,wt,col,al){ctx.font=`${wt} ${sz}px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif`;ctx.fillStyle=col;ctx.textAlign=al||'left';ctx.textBaseline='middle';ctx.fillText(t,x,y);ctx.textAlign='left';}
+function mkAvatar(ctx,x,y,r,ring){ctx.save();ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle='#8B93A1';ctx.fill();if(ring){ctx.lineWidth=4;ctx.strokeStyle=ring;ctx.stroke();}ctx.beginPath();ctx.arc(x,y-r*0.2,r*0.36,0,Math.PI*2);ctx.fillStyle='#D9DDE3';ctx.fill();ctx.beginPath();ctx.arc(x,y+r*0.75,r*0.62,Math.PI,0);ctx.fill();ctx.restore();}
+function mockup(src,size){
+  const W=src.width,H=src.height,wh='#FFFFFF',dim='rgba(255,255,255,.75)';
+  if(!SAFE[size]){ /* feed post: app chrome above and below the image */
+    const top=128,bot=250,c=document.createElement('canvas');c.width=W;c.height=H+top+bot;const x=c.getContext('2d');
+    x.fillStyle='#FFFFFF';x.fillRect(0,0,c.width,c.height);x.drawImage(src,0,top);
+    mkAvatar(x,70,top/2,34);mkText(x,'yourname',124,top/2,32,'700','#111');mkIco(x,'dots',W-60,top/2,54,'#111');
+    const iy=top+H+62;mkIco(x,'heart',62,iy,58,'#111');mkIco(x,'bubble',150,iy,56,'#111');mkIco(x,'plane',238,iy,56,'#111');mkIco(x,'mark',W-62,iy,56,'#111');
+    mkText(x,'Liked by friends and others',36,iy+70,30,'700','#111');mkText(x,'yourname  Caption for your roundup goes here…',36,iy+120,30,'400','#333');
+    return c;}
+  const c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d');x.drawImage(src,0,0);
+  if(size==='9x16'){
+    mkShade(x,W,0,300,.45);mkShade(x,W,H,H-320,.45);
+    for(let i=0;i<4;i++){x.fillStyle=i===0?wh:'rgba(255,255,255,.4)';x.beginPath();x.roundRect(24+i*((W-48)/4)+3,40,(W-48)/4-6,6,3);x.fill();}
+    mkAvatar(x,82,118,40);mkText(x,'yourname',140,108,32,'700',wh);mkText(x,'2h',140,146,26,'500',dim);mkIco(x,'dots',W-150,118,54,wh);mkIco(x,'x',W-64,118,44,wh);
+    x.strokeStyle=dim;x.lineWidth=3;x.beginPath();x.roundRect(32,H-150,W-260,96,48);x.stroke();mkText(x,'Send message',72,H-102,32,'500',dim);
+    mkIco(x,'heart',W-170,H-102,64,wh);mkIco(x,'plane',W-72,H-102,62,wh);
+  }else if(size==='reel'){
+    mkShade(x,W,0,220,.4);mkShade(x,W,H,H-760,.55);
+    mkText(x,'Reels',40,104,46,'800',wh);mkIco(x,'cam',W-70,104,60,wh);
+    const rx=W-72;[['heart','1,204'],['bubble','86'],['plane','42'],['dots','']].forEach(([k,n],i)=>{const yy=H-640+i*150;mkIco(x,k,rx,yy,k==='dots'?60:70,wh);if(n)mkText(x,n,rx,yy+62,26,'600',wh,'center');});
+    mkAvatar(x,76,H-380,36);mkText(x,'yourname',128,H-380,32,'700',wh);x.strokeStyle=wh;x.lineWidth=3;x.beginPath();x.roundRect(300,H-406,128,52,12);x.stroke();mkText(x,'Follow',364,H-380,28,'700',wh,'center');
+    mkText(x,'Caption for your roundup goes here… more',40,H-300,30,'500',wh);mkText(x,'♫ yourname · Original audio',40,H-244,28,'500',dim);
+    x.fillStyle='#000';x.fillRect(0,H-150,W,150);for(let i=0;i<5;i++){x.fillStyle=i===2?wh:'rgba(255,255,255,.6)';x.beginPath();x.roundRect(W/10+i*W/5-24,H-100,48,48,12);x.fill();}
+  }else if(size==='tiktok'){
+    mkShade(x,W,0,240,.4);mkShade(x,W,H,H-560,.55);
+    mkText(x,'Following',W/2-120,120,34,'600',dim,'center');mkText(x,'For You',W/2+110,120,34,'800',wh,'center');x.fillStyle=wh;x.fillRect(W/2+70,150,80,5);
+    const rx=W-76;mkAvatar(x,rx,H-900,46,wh);x.fillStyle='#FE2C55';x.beginPath();x.arc(rx,H-852,18,0,Math.PI*2);x.fill();mkText(x,'+',rx,H-853,30,'800',wh,'center');
+    [['heart','12.4K'],['bubble','318'],['mark','902'],['share','210']].forEach(([k,n],i)=>{const yy=H-730+i*150;mkIco(x,k,rx,yy,74,wh);mkText(x,n,rx,yy+64,26,'700',wh,'center');});
+    mkText(x,'@yourname',40,H-330,34,'800',wh);mkText(x,'Caption for your roundup goes here… #booktok',40,H-276,30,'500',wh);mkText(x,'♫ original sound - yourname',40,H-222,28,'500',dim);
+    x.fillStyle='#000';x.fillRect(0,H-150,W,150);for(let i=0;i<5;i++){if(i===2){x.fillStyle=wh;x.beginPath();x.roundRect(W/2-56,H-112,112,64,16);x.fill();mkText(x,'+',W/2,H-81,48,'800','#000','center');continue;}x.fillStyle=i===0?wh:'rgba(255,255,255,.6)';x.beginPath();x.roundRect(W/10+i*W/5-22,H-110,44,44,10);x.fill();}
+  }
+  return c;}
+function paintPrev(){const el=$('sprev');if(!el||!lastImgs||!lastImgs.length)return;const m=!!ui.mock,cv=x=>m?mockup(x.cv,ui.size):x.cv;
+  el.innerHTML=lastImgs.length===1?`<img alt="Roundup image" src="${cv(lastImgs[0]).toDataURL('image/png')}">`:`<div class="sprev-strip">${lastImgs.map((x,i)=>`<img alt="Roundup image ${i+1} of ${lastImgs.length}" src="${cv(x).toDataURL('image/png')}">`).join('')}</div>`;}
+document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-act="mock"]');if(!t)return;ui.mock=t.dataset.v==='1';saveUi();t.parentElement.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b===t));paintPrev();const h=$('mockhint');if(h)h.hidden=!ui.mock;});
 async function makeShare(kind){
   kind=kind||(ui.lm?'month':'year');if(kind==='range')rangeInit();lastKind=kind;if(!SIZES[ui.size])ui.size='4x5';
   const sz=Object.entries(SIZES).map(([k,[w,hh,l,rt]])=>`<button data-act="size" data-s="${k}" aria-pressed="${ui.size===k}"><span class="shape" style="width:${Math.round(22*w/hh)}px;height:22px"></span><b>${rt||k.replace('x',':')}</b><span>${l}</span></button>`).join('');
@@ -1199,10 +1248,11 @@ async function makeShare(kind){
    <div class="field"><span class="lab">Colors</span><div class="themes">${Object.entries(THEMES).map(([k,t])=>`<button data-act="theme" data-v="${k}" aria-pressed="${(ui.theme||'night')===k}" aria-label="${t.name}"><span class="sw" style="background:${t.bg};border-color:${t.line}"><i style="background:${t.accent}"></i><em style="background:${t.ink}"></em></span><span class="tn">${t.name}</span></button>`).join('')}</div></div>
    <div class="field"><span class="lab">Font</span><div class="fonts">${Object.entries(FONTS).map(([k,f])=>`<button data-act="font" data-v="${k}" aria-pressed="${(ui.font||'modern')===k}"><b style="font-family:${f.df.replace(/"/g,"'")}">Aa</b><span>${f.name}</span></button>`).join('')}</div></div>
    ${kind!=='month'?`<div class="field"><span class="lab">Slides</span><div class="seg">${[['one','One image'],['months','By month'],['overview','Recap + months']].map(([v,l])=>`<button data-act="split" data-v="${v}" aria-pressed="${(ui.split||'one')===v}">${l}</button>`).join('')}</div><span class="hint">Multiple slides post together as an Instagram carousel.</span></div>`:''}
+   <div class="field"><span class="lab">Preview</span><div class="seg"><button data-act="mock" data-v="0" aria-pressed="${!ui.mock}">Clean</button><button data-act="mock" data-v="1" aria-pressed="${!!ui.mock}">In the app</button></div><span class="hint" id="mockhint" ${ui.mock?'':'hidden'}>A generic app layout over your image so you can see what gets covered. Save image always saves the clean version.</span></div>
    <div class="share-prev" id="sprev"><div class="emptybox">Drawing your roundup…</div></div>
    <div class="actions"><button class="btn gold" data-act="saveimg">${navigator.canShare?'Share or save':'Save image'}</button></div><span class="hint" id="smsg"></span>`);
   const rs=await renderPages(kind);if(!rs.length||!$('sprev'))return;const r=rs[0];
-  lastImg=r;lastImgs=rs;$('sprev').innerHTML=rs.length===1?`<img alt="Roundup image" src="${r.url}">`:`<div class="sprev-strip">${rs.map((x,i)=>`<img alt="Roundup image ${i+1} of ${rs.length}" src="${x.url}">`).join('')}</div>`;
+  lastImg=r;lastImgs=rs;paintPrev();
   const [w,hh,l]=SIZES[ui.size];
   $('smsg').textContent=`${w} × ${hh} px, Instagram ${l.toLowerCase()} size.${r.extra?` Showing ${r.shown} of ${r.shown+r.extra} books; pick a taller size or a slide per month to fit them all.`:''}${rs.length>1?` ${rs.length} images, swipe to see them all.`:''} You can also press and hold the image to save it.`;
 }
