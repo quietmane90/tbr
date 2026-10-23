@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.8.0';
+const VERSION='1.8.1';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -1065,14 +1065,16 @@ function drawCover(ctx,b,img,x,y,w,h){
     ctx.font=`600 ${Math.max(8,w*0.075)}px ${C.bf}`;ctx.fillStyle='rgba(255,255,255,.8)';ctx.textBaseline='alphabetic';ctx.fillText(wrap(ctx,author(b.a),w-pad*1.6,1)[0]||'',x+pad,y+h*0.9);}
   ctx.restore();ctx.save();rr(ctx,x,y,w,h,rad);ctx.strokeStyle='rgba(255,255,255,.08)';ctx.lineWidth=1.5;ctx.stroke();ctx.restore();
 }
-const SIZES={'1x1':[1080,1080,'Square post'],'4x5':[1080,1350,'Portrait post'],'3x4':[1080,1440,'Grid post'],'9x16':[1080,1920,'Story']};
+const SIZES={'1x1':[1080,1080,'Square post','1:1'],'4x5':[1080,1350,'Portrait post','4:5'],'3x4':[1080,1440,'Grid post','3:4'],'9x16':[1080,1920,'IG Story','9:16'],'reel':[1080,1920,'Reels','9:16'],'tiktok':[1080,1920,'TikTok','9:16']};
+/* safe zones (px on 1080x1920): keep everything clear of each app's buttons and captions */
+const SAFE={'9x16':{t:230,b:250,l:60,r:60},'reel':{t:270,b:670,l:65,r:65},'tiktok':{t:190,b:400,l:60,r:150}};
 function fm(ctx,font,sample){ctx.font=font;const m=ctx.measureText(sample);return {a:m.actualBoundingBoxAscent,d:m.actualBoundingBoxDescent};}
-function plan(n,W,H,minText){
+function plan(n,W,H,minText,LF){
   let best=null;
   for(let cols=1;cols<=Math.min(n,12);cols++){
-    const rows=Math.ceil(n/cols);const gap=cols<=3?40:cols<=5?26:cols<=8?16:12;
-    const chOf=cw=>{const st=Math.max(8,Math.min(40,cw*0.12));const tf=Math.min(32,Math.max(16,cw*0.12)),tl=cw<130?3:2;return cw*1.5+cw*0.08+st+10+(cw>=minText?tf*1.2*tl+8:0);};
-    let cw=Math.min(n===1?380:340,(W-gap*(cols-1))/cols);
+    const rows=Math.ceil(n/cols);const gap=cols<=3?30:cols<=5?22:cols<=8?14:10;
+    const chOf=cw=>{const st=Math.max(8,Math.min(40,cw*0.12));const tf=Math.min(32,Math.max(16,cw*0.12)),tl=LF?LF(cw,tf):(cw<130?3:2);return cw*1.5+cw*0.08+st+10+(cw>=minText?tf*1.2*tl+8:0);};
+    let cw=Math.min(n===1?460:400,(W-gap*(cols-1))/cols);
     while(cw>=54&&rows*chOf(cw)+(rows-1)*gap*1.1>H)cw-=2;
     if(cw<54)continue;
     if(!best||cw>best.cw+1){const st=Math.max(8,Math.min(40,cw*0.12));best={cols:Math.ceil(n/rows),gap,cw,text:cw>=minText,st,ch:chOf(cw),rows,tot:rows*chOf(cw)+(rows-1)*gap*1.1};}
@@ -1085,25 +1087,26 @@ async function render(kind,y,m,size,pg){
   const RG=kind==='range'?rangeInfo():null;
   const full=RG?RG.list:period(y,m);if(!full.length)return null;const list=pg?pg.list:full;
   try{await Promise.all([`800 120px ${C.df}`,`700 32px ${C.bf}`,`600 30px ${C.bf}`,`800 30px ${C.bf}`,`400 30px ${C.df}`].map(f=>document.fonts.load(f)));}catch(e){}
-  const [W,H]=SIZES[size]||SIZES['4x5'];const story=size==='9x16',square=size==='1x1';
-  const P=80,top=story?210:72,bot=story?250:0,footH=square?40:48;
-  const cv=document.createElement('canvas');cv.width=W;cv.height=H;const ctx=cv.getContext('2d');
-  if(C.grad){const bg=ctx.createLinearGradient(0,0,0,H);bg.addColorStop(0,C.bg2);bg.addColorStop(1,C.bg);ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);}else{ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);}
-  if(C.glow){const glow=ctx.createRadialGradient(W*0.85,-80,10,W*0.85,-80,W*0.9);glow.addColorStop(0,C.glow);glow.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=glow;ctx.fillRect(0,0,W,H);}
+  const [W0,H]=SIZES[size]||SIZES['4x5'];const SZ=SAFE[size],story=!!SZ,square=size==='1x1';
+  const P=SZ?SZ.l:64,top=SZ?SZ.t:64,bot=SZ?SZ.b:0,footH=0;
+  const W=W0-(SZ?SZ.r-SZ.l:0);
+  const cv=document.createElement('canvas');cv.width=W0;cv.height=H;const ctx=cv.getContext('2d');
+  if(C.grad){const bg=ctx.createLinearGradient(0,0,0,H);bg.addColorStop(0,C.bg2);bg.addColorStop(1,C.bg);ctx.fillStyle=bg;ctx.fillRect(0,0,W0,H);}else{ctx.fillStyle=C.bg;ctx.fillRect(0,0,W0,H);}
+  if(C.glow){const glow=ctx.createRadialGradient(W0*0.85,-80,10,W0*0.85,-80,W0*0.9);glow.addColorStop(0,C.glow);glow.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=glow;ctx.fillRect(0,0,W0,H);}
   ctx.textBaseline='alphabetic';ctx.textAlign='left';
   const yl=RG?RG.yl:(kind==='month'?y:'');
   const kick=(RG?RG.kick:(kind==='month'?'MONTHLY ROUNDUP':'YEAR IN BOOKS'))+(yl?'  ·  '+yl:'');
   const ks=square?22:26;let kfs=ks;const pgw=0;const trk=ch=>ch===' '?1:5;for(;kfs>14;kfs--){ctx.font=`800 ${kfs}px ${C.bf}`;let tw=0;for(const chh of kick)tw+=ctx.measureText(chh).width+trk(chh);if(tw<=W-P*2-pgw)break;}ctx.fillStyle=C.accent;ctx.font=`800 ${kfs}px ${C.bf}`;let kx=P;for(const chh of kick){ctx.fillText(chh,kx,top+ks);kx+=ctx.measureText(chh).width+(chh===' '?1:5);}
   const title=RG?RG.title:(kind==='month'?FULL[MI(m)]:y);
   const compact=!!(pg&&pg.compact);
-  let fs=compact?(square?84:104):(square?118:(story?164:148));ctx.font=`800 ${fs}px ${C.df}`;
+  let fs=compact?(square?84:104):(square?118:(story?136:148));ctx.font=`800 ${fs}px ${C.df}`;
   while(ctx.measureText(title).width>W-P*2&&fs>60){fs-=4;ctx.font=`800 ${fs}px ${C.df}`;}
   const TM=fm(ctx,`800 ${fs}px ${C.df}`,'HdlJ0123456789'),TD=fm(ctx,`800 ${fs}px ${C.df}`,'gjpqy').d;ctx.font=`800 ${fs}px ${C.df}`;const tb=top+ks+26+TM.a;ctx.fillStyle=C.ink;ctx.fillText(title,P-4,tb);
   const av=avg(full),five=full.filter(b=>+b.r===5).length;
   const stats=[[String(full.length),full.length===1?'book read':'books read'],[av.toFixed(1),'average rating'],[String(five),'five-star reads']];
   let lineY;
   if(!compact){
-    const sy=tb+TD+(square?34:46);const colW=(W-P*2)/3;const vf0=square?44:(story?60:54),lf0=square?16:(story?21:19);const inset=square?22:30;
+    const sy=tb+TD+(square?34:46);const colW=(W-P*2)/3;const vf0=square?44:(story?52:54),lf0=square?16:(story?19:19);const inset=square?22:30;
     const capT=vf0*0.72;const nfam=(fm(ctx,`800 60px ${C.df}`,'2').a<fm(ctx,`800 60px ${C.df}`,'H').a*0.82)?C.bf:C.df;let vf=vf0,NM=fm(ctx,`800 ${vf}px ${nfam}`,'0123456789');vf=Math.max(vf0*0.8,Math.min(vf0*1.5,vf0*capT/Math.max(1,NM.a)));NM=fm(ctx,`800 ${vf}px ${nfam}`,'0123456789.');
     const base=sy+NM.a;
     let lf=lf0;const lab=ls=>{ctx.font=`700 ${lf}px ${C.bf}`;let w=0;for(const chh of ls.toUpperCase())w+=ctx.measureText(chh).width+1.5;return w;};while(lf>11&&stats.some(([v,l],i)=>lab(l)>colW-(i>0?inset:0)-14))lf--;
@@ -1116,9 +1119,10 @@ async function render(kind,y,m,size,pg){
     lineY=lb+(square?30:42);
   }else lineY=tb+TD+(square?24:32);
   ctx.fillStyle=C.line;ctx.fillRect(P,lineY,W-P*2,2);
-  const gy0=lineY+(square?32:44),footY=H-bot-footH,gridH=footY-gy0-(square?24:34);
-  let p=plan(list.length,W-P*2,gridH,150),shown=list,extra=0;
-  if(!p){for(let k=list.length-1;k>=2;k--){p=plan(k,W-P*2,gridH,150);if(p){shown=list.slice(0,k-1);extra=list.length-shown.length;break;}}}
+  const gy0=lineY+(square?28:36),footY=H-bot-footH,gridH=footY-gy0-(story?0:(square?36:44));
+  const lfMemo=new Map(),LFn=arr=>(cw,tf)=>{const k=arr.length+':'+Math.round(cw)+':'+Math.round(tf);if(lfMemo.has(k))return lfMemo.get(k);ctx.font=`700 ${Math.round(tf)}px ${C.bf}`;const v=Math.max(1,...arr.map(b=>wrap(ctx,b.t,cw,cw<130?3:2).length));lfMemo.set(k,v);return v;};
+  let p=plan(list.length,W-P*2,gridH,150,LFn(list)),shown=list,extra=0;
+  if(!p){for(let k=list.length-1;k>=2;k--){p=plan(k,W-P*2,gridH,150,LFn(list.slice(0,k)));if(p){shown=list.slice(0,k-1);extra=list.length-shown.length;break;}}}
   if(!p)return null;
   const imgs=await Promise.all(shown.map(imgForCanvas));
   const slots=shown.length+(extra?1:0);const gy=gy0+Math.max(0,(gridH-p.tot)*0.5);
@@ -1187,7 +1191,7 @@ document.addEventListener('click',e=>{const t=e.target.closest('[data-act="theme
 document.addEventListener('click',e=>{const t=e.target.closest('[data-act="split"]');if(t){ui.split=t.dataset.v;saveUi();makeShare(lastKind);}});
 async function makeShare(kind){
   kind=kind||(ui.lm?'month':'year');if(kind==='range')rangeInit();lastKind=kind;if(!SIZES[ui.size])ui.size='4x5';
-  const sz=Object.entries(SIZES).map(([k,[w,hh,l]])=>`<button data-act="size" data-s="${k}" aria-pressed="${ui.size===k}"><span class="shape" style="width:${Math.round(22*w/hh)}px;height:22px"></span><b>${k.replace('x',':')}</b><span>${l}</span></button>`).join('');
+  const sz=Object.entries(SIZES).map(([k,[w,hh,l,rt]])=>`<button data-act="size" data-s="${k}" aria-pressed="${ui.size===k}"><span class="shape" style="width:${Math.round(22*w/hh)}px;height:22px"></span><b>${rt||k.replace('x',':')}</b><span>${l}</span></button>`).join('');
   openSheet(`<div class="sh-head" style="grid-template-columns:1fr auto"><div style="display:grid;gap:4px"><span class="kicker">Share</span><h3>${kind==='range'?rangeInfo().head:kind==='month'?`${FULL[MI(ui.lm)]} ${ui.ly}`:ui.ly} roundup</h3></div>${X}</div>
    <div class="seg">${ui.lm?`<button data-act="kind" data-k="month" aria-pressed="${kind==='month'}">Month</button>`:''}<button data-act="kind" data-k="range" aria-pressed="${kind==='range'}">Pick months</button><button data-act="kind" data-k="year" aria-pressed="${kind==='year'}">Whole year</button></div>
    ${kind==='range'?rangeControls():''}
