@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.9.0';
+const VERSION='1.9.1';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -1200,7 +1200,7 @@ function mkIco(ctx,kind,x,y,s,col){ctx.save();ctx.strokeStyle=col;ctx.fillStyle=
   else if(kind==='x'){ctx.moveTo(x-s*0.35,y-s*0.35);ctx.lineTo(x+s*0.35,y+s*0.35);ctx.moveTo(x+s*0.35,y-s*0.35);ctx.lineTo(x-s*0.35,y+s*0.35);ctx.stroke();}
   else if(kind==='cam'){ctx.roundRect(x-s*0.45,y-s*0.3,s*0.9,s*0.65,s*0.12);ctx.stroke();ctx.beginPath();ctx.arc(x,y+s*0.03,s*0.18,0,Math.PI*2);ctx.stroke();}
   ctx.restore();}
-function mkShade(ctx,W,y0,y1,a){const g=ctx.createLinearGradient(0,y0,0,y1);g.addColorStop(0,`rgba(0,0,0,${y0<y1?a:0})`);g.addColorStop(1,`rgba(0,0,0,${y0<y1?0:a})`);ctx.fillStyle=g;ctx.fillRect(0,Math.min(y0,y1),W,Math.abs(y1-y0));}
+function mkShade(ctx,W,y0,y1,a){/* darkest at y0 (the screen edge), fading to clear at y1 */const g=ctx.createLinearGradient(0,y0,0,y1);g.addColorStop(0,`rgba(0,0,0,${a})`);g.addColorStop(0.6,`rgba(0,0,0,${a*0.35})`);g.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=g;ctx.fillRect(0,Math.min(y0,y1),W,Math.abs(y1-y0));}
 function mkText(ctx,t,x,y,sz,wt,col,al){ctx.font=`${wt} ${sz}px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif`;ctx.fillStyle=col;ctx.textAlign=al||'left';ctx.textBaseline='middle';ctx.fillText(t,x,y);ctx.textAlign='left';}
 function mkAvatar(ctx,x,y,r,ring){ctx.save();ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle='#8B93A1';ctx.fill();if(ring){ctx.lineWidth=4;ctx.strokeStyle=ring;ctx.stroke();}ctx.beginPath();ctx.arc(x,y-r*0.2,r*0.36,0,Math.PI*2);ctx.fillStyle='#D9DDE3';ctx.fill();ctx.beginPath();ctx.arc(x,y+r*0.75,r*0.62,Math.PI,0);ctx.fill();ctx.restore();}
 function mockup(src,size){
