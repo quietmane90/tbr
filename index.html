@@ -313,6 +313,10 @@ input.inp[type="date"]::-webkit-date-and-time-value{text-align:left}
 .dp-g button{border:0;background:none;aspect-ratio:1;border-radius:50%;font:inherit;font-weight:700;font-size:.92rem;color:var(--fg);cursor:pointer;font-variant-numeric:tabular-nums}
 .dp-g button.tdy{box-shadow:inset 0 0 0 1.5px var(--gold)}.dp-g button.sel{background:var(--gold);color:var(--gold-ink)}
 .dp-f{display:flex;justify-content:space-between}
+.pk{display:grid;grid-template-columns:76px 1fr;gap:12px;align-items:start;border:1px solid var(--line);border-radius:14px;padding:10px;background:var(--raise)}
+.pk-out{grid-template-columns:1fr}.pk-cv{border:0;background:none;padding:0;cursor:pointer}.pk-cv .cv{width:76px}
+.pk-t{display:grid;gap:4px;min-width:0}.pk-t b{font-family:var(--display);font-weight:800;font-size:1.02rem;line-height:1.15}.pk-why{font-size:.86rem;line-height:1.35}
+.pickbtn{display:inline-flex;align-items:center;gap:6px}
 /* phone fit: no sideways drift, no iOS focus zoom */
 html,body{max-width:100%;overflow-x:clip;overscroll-behavior-x:none}
 @media (pointer:coarse){input,select,textarea{font-size:16px!important}}
@@ -340,7 +344,7 @@ html,body{max-width:100%;overflow-x:clip;overscroll-behavior-x:none}
       <div id="now"></div>
     </div>
     <div class="sec">
-      <div class="sec-h"><h2>Up next</h2><span class="muted" style="font-size:.8rem">Hold and drag to reorder</span></div>
+      <div class="sec-h"><h2>Up next</h2><button class="btn ghost small pickbtn" data-act="pick"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.3" fill="currentColor"/><circle cx="15.5" cy="15.5" r="1.3" fill="currentColor"/><circle cx="15.5" cy="8.5" r="1.3" fill="currentColor"/><circle cx="8.5" cy="15.5" r="1.3" fill="currentColor"/></svg>Pick for me</button></div><span class="muted" style="font-size:.8rem;margin-top:-6px">Hold and drag to reorder</span>
       <div class="rail" id="rail"></div>
     </div>
     <div class="sec">

@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.9.3';
+const VERSION='1.10.0';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -831,6 +831,99 @@ document.addEventListener('click',e=>{
   else if(a==='impall'){const on=t.dataset.v==='1';IMP.items.forEach(it=>{if(!it.have)it.on=on;});document.querySelectorAll('.imp-cb:not(:disabled)').forEach(c=>c.checked=on);}
 });
 
+/* ---------- pick for me: mood reads from your own library ---------- */
+const PICK={mood:'fav',text:'',seen:[],res:null,busy:false};
+const PMOODS=[['fav','Like my 5 stars'],['next','Next in a series'],['new','Start a new series'],['solo','Standalone'],['quick','Quick read'],['diff','Something different'],['any','Surprise me']];
+function pickCands(){
+  const out=[];const m=bySeries();
+  for(const [s,list] of m){
+    if(s==='Standalone'){for(const b of list)if(b.st==='Unread'&&b.av!=='No')out.push({b,kind:'solo'});continue;}
+    if(list.some(b=>b.st==='DNF'))continue;
+    const started=list.some(b=>b.st==='Read'||b.st==='Reading');
+    const nxt=list.filter(b=>b.st==='Unread'&&b.av!=='No').sort((x,y)=>(+x.n)-(+y.n))[0];
+    if(!nxt)continue;
+    if(list.some(b=>b.st==='Reading'))continue;
+    const rated=list.filter(b=>b.st==='Read'&&b.r!=='');const sa=rated.length?rated.reduce((a,b)=>a+(+b.r),0)/rated.length:0;
+    out.push({b:nxt,kind:started?'next':'new',sa});
+  }
+  return out;
+}
+function pickLocal(){
+  const C=pickCands().filter(c=>!PICK.seen.includes(c.b.id));if(!C.length)return [];
+  const five=books.filter(b=>b.st==='Read'&&+b.r>=5);const favA=new Map();for(const b of five)favA.set(b.a,(favA.get(b.a)||0)+1);
+  const readA=new Set(books.filter(b=>b.st==='Read').map(b=>b.a));const P={High:2,Medium:1,'Test First':.5,Low:0};const md=PICK.mood;
+  const quick=b=>/novella|short/i.test(b.no||'')||String(b.n).includes('.');
+  const sc=C.map(c=>{const b=c.b;let s=(P[b.p]||0)+Math.random()*2.2;const fa=favA.get(b.a)||0;s+=Math.min(fa,4)*0.9;
+    if(c.kind==='next')s+=c.sa>=4.5?3:c.sa>=4?1.5:0;if(D.queue.includes(qKey(b)))s+=1;
+    if(md==='next')s+=c.kind==='next'?6:-3;if(md==='new')s+=c.kind==='new'?5:-2;if(md==='solo')s+=c.kind==='solo'?6:-3;
+    if(md==='quick')s+=quick(b)?6:-2;if(md==='diff')s+=readA.has(b.a)?-3:5;if(md==='any')s=Math.random()*10;
+    const why=c.kind==='next'?(c.sa?`Next in ${b.s}, which you rate ${(Math.round(c.sa*4)/4)} on average.`:`Next in ${b.s}.`):fa?`${author(b.a)} wrote ${fa} of your 5-star reads.`:c.kind==='new'?`Starts ${b.s}.`:`A standalone from your ${b.p.toLowerCase()==='test first'?'sample':b.p.toLowerCase()} priority list.`;
+    return {b,s,why};});
+  sc.sort((x,y)=>y.s-x.s);return sc.slice(0,3).map(x=>({id:x.b.id,why:x.why}));
+}
+async function pickClaude(wantNew){
+  const C=pickCands().filter(c=>!PICK.seen.includes(c.b.id));
+  const five=books.filter(b=>b.st==='Read'&&+b.r>=5).map(b=>`${b.t} by ${author(b.a)}${b.s!=='Standalone'?' ('+b.s+')':''}`);
+  const low=books.filter(b=>(b.st==='Read'&&b.r!==''&&+b.r<=3)||b.st==='DNF').map(b=>`${b.t} by ${author(b.a)} (${b.st==='DNF'?'DNF':b.r+' stars'})`);
+  const lib=books.map(b=>`${b.t} | ${author(b.a)}`);
+  const moodL=(PMOODS.find(m=>m[0]===PICK.mood)||[])[1]||'';
+  const prompt=`You recommend the next book for one reader from their own reading tracker. Today is ${TODAY}.
+Books they rated 5 stars:\n${five.join('\n')||'(none yet)'}
+Books they rated 3 or lower, or did not finish:\n${low.join('\n')||'(none)'}
+Mood they picked: ${moodL}${PICK.text?`\nWhat they typed: <<${PICK.text}>>`:''}
+Candidates from their library (unread, released; series entries are the next book they would actually read):
+${C.map(c=>`id ${c.b.id}: ${c.b.t} by ${author(c.b.a)}${c.b.s!=='Standalone'?` (${c.b.s} ${fmtN(c.b.n)}, ${c.kind==='next'?'continues a series they started':'starts a new series'})`:' (standalone)'} [priority ${c.b.p}]`).join('\n')||'(none)'}
+Return JSON only: {"picks":[{"id":number,"why":string}],"outside":[{"title":string,"author":"First Last","series":string,"number":number|null,"why":string}],"message":string}
+Rules:
+- "picks": up to 3 ids from the candidate list only, best first, matched to their 5-star taste and the mood. Never invent ids.
+- "why": one short, specific sentence in plain words that connects the pick to books they loved. No em dashes.
+- "outside": ${wantNew?'3 released books they do NOT own that fit their taste and mood.':'only if fewer than 2 candidates are a genuinely good fit; then up to 3 released books they do NOT own. Otherwise an empty list.'} "series" is the series name or "" for a standalone, "number" its position (start with book 1 unless they already own earlier books).
+- Never suggest anything already in their library:\n${lib.join('\n')}
+- "message": empty, or one short line if something matters (for example nothing fits the mood).`;
+  return await smp.json(prompt,{modelTier:'default'});
+}
+function pickSheet(){
+  PICK.res=null;PICK.seen=[];
+  openSheet(`<div class="sh-head" style="grid-template-columns:1fr auto"><div style="display:grid;gap:4px"><span class="kicker">Not sure what to read?</span><h3>Pick for me</h3></div>${X}</div>
+  <div class="field"><span class="lab">Mood</span><div class="pills" style="flex-wrap:wrap">${PMOODS.map(([v,l])=>`<button class="pill" data-act="pmood" data-v="${v}" aria-pressed="${PICK.mood===v}">${l}</button>`).join('')}</div></div>
+  ${typeof smp!=='undefined'&&smp?`<div class="field"><label for="pk-t">Anything specific? <span class="hint">(optional)</span></label><input class="inp" id="pk-t" placeholder="dark and twisty, funny, big battles, under 400 pages" value="${esc(PICK.text)}"></div>`:''}
+  <div class="actions"><button class="btn gold" data-act="pgo" id="pk-go">Pick from my library</button>${typeof smp!=='undefined'&&smp?`<button class="btn ghost" data-act="pnew">Find something new</button>`:''}</div>
+  <div id="pk-res"></div>`);
+}
+async function pickRun(wantNew,again){
+  if(PICK.busy)return;const res=$('pk-res');if(!res)return;const t=$('pk-t');if(t)PICK.text=t.value.trim();
+  if(!again)PICK.seen=[];
+  PICK.busy=true;res.innerHTML=`<div class="emptybox">${typeof smp!=='undefined'&&smp?'Claude is looking through your shelves…':'Picking…'}</div>`;
+  let picks=[],outside=[],msg='';
+  try{
+    if(typeof smp!=='undefined'&&smp){const o=await pickClaude(wantNew);const ok=new Set(pickCands().map(c=>c.b.id));picks=((o&&o.picks)||[]).filter(p=>ok.has(+p.id)).slice(0,3);outside=((o&&o.outside)||[]).filter(r=>r&&r.title&&!qaHave(r)).slice(0,3);msg=(o&&o.message)||'';}
+    else picks=pickLocal();
+  }catch(err){const c=err&&err.code;msg=c==='not_granted'?'Allow this page to ask Claude to get picks from Claude. Here are quick picks instead.':c==='usage_limit'?'You hit your Claude usage limit, so here are quick picks instead.':'Claude could not pick right now, so here are quick picks instead.';picks=pickLocal();}
+  finally{PICK.busy=false;}
+  for(const p of picks)PICK.seen.push(+p.id);PICK.res={picks,outside};
+  if(!picks.length&&!outside.length){res.innerHTML=`<div class="emptybox">${esc(msg||'Nothing left that fits. Try another mood or add more books.')}</div>`;return;}
+  res.innerHTML=`${msg?`<p class="hint" style="margin:0">${esc(msg)}</p>`:''}
+  ${picks.length?`<div class="lgh">From your library</div><div style="display:grid;gap:10px">${picks.map(p=>{const b=byId(+p.id);return `<div class="pk"><button class="pk-cv" data-act="book" data-id="${b.id}" aria-label="Open ${esc(b.t)}">${cover(b,'','.5rem')}</button><div class="pk-t"><b>${esc(b.t)}</b><span class="hint">${b.s==='Standalone'?esc(author(b.a)):esc(b.s)+' '+fmtN(b.n)+' · '+esc(author(b.a))}</span><span class="pk-why">${esc(p.why||'')}</span><div class="actions"><button class="btn small gold" data-act="pstart" data-id="${b.id}">Start reading</button><button class="btn small ghost" data-act="pnext" data-id="${b.id}">Read this next</button></div></div></div>`;}).join('')}</div>`:''}
+  ${outside.length?`<div class="lgh">Not in your library yet</div><div style="display:grid;gap:8px">${outside.map((r,i)=>`<div class="pk pk-out"><div class="pk-t"><b>${esc(r.title)}</b><span class="hint">${r.series?esc(r.series)+(r.number!=null?' #'+esc(r.number):'')+' · ':''}${esc(r.author)}</span><span class="pk-why">${esc(r.why||'')}</span><div class="actions"><button class="btn small gold" data-act="padd" data-i="${i}">Add to my TBR</button></div></div></div>`).join('')}</div>`:''}
+  ${picks.length?`<button class="link" data-act="pagain" style="justify-self:start">Show me different picks</button>`:''}`;
+}
+function pickAdd(i,btn){
+  const r=PICK.res&&PICK.res.outside[i];if(!r||qaHave(r)){toast('Already in your library.');return;}
+  const S=[...bySeries().keys()];let id=Math.max(0,...books.map(x=>x.id));
+  const sName=r.series?(S.find(x=>normT(x)===normT(r.series))||r.series):'Standalone';const ex=bySeries().get(sName);
+  const a=ex&&qaSame(ex[0].a,r.author)?ex[0].a:toLastFirst(r.author||'');
+  const b={id:++id,a,s:sName,t:String(r.title).trim(),n:r.number!=null&&!isNaN(+r.number)?+r.number:1,st:'Unread',m:'',y:'',p:'High',r:'',av:'Yes',no:'',nc:1};
+  books.push(b);if(typeof setFire==='function')setFire();mark();renderAll();
+  if(btn){btn.textContent='Added';btn.disabled=true;}toast(`Added ${b.t} to your library.`);
+}
+document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-act^="p"]');if(!t)return;const a=t.dataset.act;
+  if(!['pick','pmood','pgo','pnew','pagain','pstart','pnext','padd'].includes(a))return;e.preventDefault();e.stopPropagation();
+  if(a==='pick')pickSheet();
+  else if(a==='pmood'){PICK.mood=t.dataset.v;t.parentElement.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===t));}
+  else if(a==='pgo')pickRun(false,false);else if(a==='pnew')pickRun(true,false);else if(a==='pagain')pickRun(false,true);
+  else if(a==='pstart'){const id=+t.dataset.id;start(id);renderAll();closeSheet();toast('Happy reading.');}
+  else if(a==='pnext'){const b=byId(+t.dataset.id);qInsert(qKey(b),0);mark();renderAll();t.textContent='Up next #1';t.disabled=true;toast(`${b.t} is now first in Up next.`);}
+  else if(a==='padd')pickAdd(+t.dataset.i,t);},true);
 /* ---------- date picker: nothing is chosen until you tap a day ---------- */
 const DPM=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const dpISO=(y,m,d)=>`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
