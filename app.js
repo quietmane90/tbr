@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.17.2';
+const VERSION='1.17.3';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -1743,8 +1743,8 @@ async function rcSuggest(){
     const main=rd.filter(b=>Number.isInteger(+b.n)&&+b.n>0).sort((x,y)=>(+x.n)-(+y.n));const first=(main[0]||rd.sort((x,y)=>(+x.n)-(+y.n))[0]);
     const rt=rd.filter(b=>b.r!=='');if(!rt.length)continue;ents.push({b:first,series:name,n:rd.length,r:rt.reduce((s,b)=>s+(+b.r),0)/rt.length});}
   const byB=new Map(ents.map(e=>[e.b.id,e]));const have=new Set((D.recs||[]).map(p=>p[0]+'-'+p[1]));const usedRead=new Set((D.recs||[]).map(p=>p[1]));
-  const lines=ents.map(e=>`${e.b.id} | ${e.b.t} | ${author(e.b.a)} | ${e.series?`${e.series} (read ${e.n})`:'standalone'} | ${e.r.toFixed(2)}`).join('\n');
-  const prompt=`You make "If you like this, read this" pairings for a book account's social post. Every book must come from the reader's list below (id | first book | author | series | their average rating). Use the ids exactly.
+  const pop=e=>e.b.pop||0;const lines=ents.map(e=>`${e.b.id} | ${e.b.t} | ${author(e.b.a)} | ${e.series?`${e.series} (read ${e.n})`:'standalone'} | ${e.r.toFixed(2)} | ${pop(e)?pop(e).toLocaleString('en-US'):'unknown'}`).join('\n');
+  const prompt=`You make "If you like this, read this" pairings for a book account's social post. Every book must come from the reader's list below (id | first book | author | series | their average rating | Goodreads ratings count, a measure of how well known it is). Use the ids exactly.
 
 Work in two steps.
 Step 1, for each entry, decide from what you know of the book:
@@ -1755,7 +1755,8 @@ Step 2, make pairings that pass all of these:
 - same primary genre. Never cross genres: no LitRPG paired with epic fantasy, no science fiction paired with fantasy, no progression fantasy paired with grimdark epic.
 - same or closely neighboring subgenre.
 - at least two concrete shared plot or setting hooks, the kind a fan would recognize right away.
-- "like" is the better known book of the two. "read" is one the reader rated 4.5 or higher.
+- "like" is a big, widely known book and "read" is a lesser known one the post is putting people onto. When both counts are listed, "like" needs at least 3 times the ratings of "read". When a count is unknown, judge from what you know, and leave the pair out if you are not sure "like" is clearly more popular.
+- "read" is one the reader rated 4.5 or higher.
 - never two books from the same series or the same author. Each "read" book at most once. Skip these "read" ids, already used: ${[...usedRead].join(', ')||'none'}.
 Only return pairs a well-read fan of both books would agree with. Three great pairs beat eight weak ones, and zero is fine.
 
@@ -1764,7 +1765,7 @@ Return JSON only: {"pairs":[{"like":id,"read":id,"genre":"short genre and subgen
 ${lines}`;
   try{const o=await smp.json(prompt,{modelTier:'complex'});let n=0;D.recs=D.recs||[];
     for(const p of (o&&o.pairs)||[]){const a=byB.get(+p.like),b=byB.get(+p.read);if(!a||!b||a===b)continue;
-      if(a.b.a===b.b.a||(a.series&&a.series===b.series)||b.r<4.5)continue;const k=a.b.id+'-'+b.b.id;if(have.has(k)||usedRead.has(b.b.id))continue;
+      if(a.b.a===b.b.a||(a.series&&a.series===b.series)||b.r<4.5)continue;if(pop(a)&&pop(b)&&pop(a)<pop(b)*2)continue;const k=a.b.id+'-'+b.b.id;if(have.has(k)||usedRead.has(b.b.id))continue;
       D.recs.push([a.b.id,b.b.id,String(p.genre||'').slice(0,40),String(p.why||'').slice(0,90)]);have.add(k);usedRead.add(b.b.id);n++;}
     if(n)mark();makeShare(lastKind).then(()=>{const m=$('rc-msg');if(m)m.textContent=n?`Added ${n} pair${n===1?'':'s'}, matched by genre and plot. Remove any you don't want.`:'No pairs passed the genre and plot match. Add your own below.';});
   }catch(e){const m=$('rc-msg');if(m)m.textContent='Claude could not suggest pairs right now. Add your own below.';const b2=$('rc-sug');if(b2){b2.disabled=false;b2.textContent='Suggest pairs from my library';}}
