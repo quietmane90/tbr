@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.11.0';
+const VERSION='1.11.1';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -1061,7 +1061,7 @@ function dragEnd(commit){
       if(DR.kind==='q'){const from=+DR.src.dataset.slot;const key=D.queue[from];qInsert(key,T.slot+(T.after?1:0));mark();renderAll();}
       else if(DR.kind==='l'){const id=+DR.src.dataset.slot;const mv=byId(id);const tg=byId(T.slot);if(!ui.lm&&tg&&mv&&tg.m!==mv.m){toast(`That one is in ${FULL[MI(tg.m)]}. Change the finished date to move it there.`);}else{const list=period(ui.ly,ui.lm||mv.m);const rest=list.filter(b=>b.id!==id);let k=rest.findIndex(b=>b.id===T.slot);if(k<0)k=rest.length;if(T.after)k++;rest.splice(k,0,mv);rest.forEach((b,i)=>b.lo=i);mark();renderAll();toast('Order updated');}}
       else{let key;if(DR.kind==='s')key=DR.src.dataset.s;else key=qKey(byId(+DR.src.dataset.id));
-        if(key){const to=T.r?T.slot+(T.after?1:0):D.queue.length;qInsert(key,to);mark();renderAll();toast(`Added to Up next at #${qPos(D.queue.indexOf(key))||D.queue.indexOf(key)+1}`);}}
+        if(key&&!qBooks(key).some(x=>x.st==='Unread'||x.st==='Reading')){toast('Already finished, so it stays out of Up next.');}else if(key){const to=T.r?T.slot+(T.after?1:0):D.queue.length;qInsert(key,to);mark();renderAll();toast(`Added to Up next at #${qPos(D.queue.indexOf(key))||D.queue.indexOf(key)+1}`);}}
     }
   }
   DR.on=false;DR.src=null;DR.target=null;dragCleanup();
