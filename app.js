@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.10.0';
+const VERSION='1.11.0';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -46,7 +46,7 @@ async function askPersist(){try{if(navigator.storage&&navigator.storage.persist&
 const ui={tab:'home',ly:'',lm:undefined,st:'Unread',prio:'',q:'',open:{},size:'4x5',hideInstall:false};
 try{const s=JSON.parse(localStorage.getItem('tbr-ui')||'null');if(s)Object.assign(ui,s,{q:''});}catch(e){}
 const hsh=(location.hash||'').slice(1);if(['home','log','library'].includes(hsh))ui.tab=hsh;
-function saveUi(){try{localStorage.setItem('tbr-ui',JSON.stringify({tab:ui.tab,ly:ui.ly,lm:ui.lm,st:ui.st,prio:ui.prio,open:ui.open,size:ui.size,rg:ui.rg,split:ui.split,theme:ui.theme,font:ui.font,mock:ui.mock,hideInstall:ui.hideInstall}))}catch(e){}}
+function saveUi(){try{localStorage.setItem('tbr-ui',JSON.stringify({tab:ui.tab,ly:ui.ly,lm:ui.lm,st:ui.st,prio:ui.prio,open:ui.open,size:ui.size,rg:ui.rg,split:ui.split,theme:ui.theme,font:ui.font,mock:ui.mock,sort:ui.sort,hideInstall:ui.hideInstall}))}catch(e){}}
 
 const byId=id=>books.find(b=>b.id===id);
 const nextId=()=>Math.max(0,...books.map(x=>x.id))+1;
@@ -170,9 +170,29 @@ function renderLog(){
 /* ---------- library ---------- */
 function counts(){const c={Unread:0,Reading:0,Read:0,DNF:0,All:books.length};for(const b of books)c[b.st]=(c[b.st]||0)+1;return c;}
 function matches(b){if(ui.st!=='All'&&b.st!==ui.st)return false;if(ui.prio&&b.p!==ui.prio)return false;if(ui.q){const q=ui.q.toLowerCase();if(!(b.t+' '+b.s+' '+author(b.a)).toLowerCase().includes(q))return false;}return true;}
+const dShort=d=>{const p=String(d).split('-');return `${MONTHS[+p[1]-1]} ${+p[2]}`;};
+function readSpan(b){
+  if(b.st==='Reading')return b.ds?`Started ${dShort(b.ds)}, ${b.ds.slice(0,4)}`:'';
+  if(b.st!=='Read'&&b.st!=='DNF')return '';
+  if(b.ds&&b.df){const y1=b.ds.slice(0,4),y2=b.df.slice(0,4);return `${dShort(b.ds)}${y1===y2?'':', '+y1} to ${dShort(b.df)}, ${y2}`;}
+  if(b.df)return `${b.st==='DNF'?'Stopped':'Finished'} ${dShort(b.df)}, ${b.df.slice(0,4)}`;
+  if(b.st==='Read'&&b.m)return `Read ${b.m} ${b.y}`;return '';}
+const dKey=b=>b.df||(b.y?`${b.y}-${String(MI(b.m)+1).padStart(2,'0')}-${b.lo!=null?'0'+String(b.lo).padStart(2,'0'):'15'}`:'');
+const SORTS=[['series','By series'],['recent','Recently read'],['oldest','Oldest read'],['high','Highest rated'],['low','Lowest rated'],['title','Title A to Z']];
+function flatLib(){
+  const L=books.filter(matches);const s=ui.sort;const r=b=>b.r===''?null:+b.r;
+  const CI=new Map();let ci=0;for(const y of [...new Set(readBooks().map(x=>x.y))].sort())for(const x of period(y,''))CI.set(x.id,++ci);const ck=x=>CI.has(x.id)?CI.get(x.id):(x.df?Date.parse(x.df)/1e9:null);
+  L.sort((a,b)=>{
+    if(s==='recent'||s==='oldest'){const ka=ck(a),kb=ck(b);if((ka==null)!==(kb==null))return ka==null?1:-1;const c=(ka||0)-(kb||0);return (s==='recent'?-c:c)||a.t.localeCompare(b.t);}
+    if(s==='high'||s==='low'){const ra=r(a),rb=r(b);if((ra==null)!==(rb==null))return ra==null?1:-1;const c=(ra||0)-(rb||0);return (s==='high'?-c:c)||((ck(b)||0)-(ck(a)||0));}
+    return a.t.localeCompare(b.t);});
+  if(!L.length)return `<div class="emptybox">Nothing matches. Try another filter.</div>`;
+  return `<div class="series"><div class="blist" style="border-top:0">${L.map(b=>{const d=readSpan(b);return `<button class="brow" data-act="book" data-id="${b.id}" data-drag="b">${cover(b,'','.3rem')}<span class="bt"><b>${esc(b.t)}</b><span>${b.s==='Standalone'?esc(author(b.a)):esc(b.s)+' '+fmtN(b.n)}</span>${d?`<span class="dline">${esc(d)}</span>`:''}</span><span class="bright">${stPill(b)}${b.r!==''?stars(b.r,11):''}</span></button>`;}).join('')}</div></div>`;}
 function renderLib(){
   const c=counts();
   $('stchips').innerHTML=['Unread','Reading','Read','DNF','All'].map(s=>`<button class="pill" data-act="st" data-s="${s}" aria-pressed="${ui.st===s}">${s==='Unread'?'To read':s}<span class="c">${c[s]||0}</span></button>`).join('');
+  const ls=$('lsort');if(ls)ls.value=ui.sort||'series';
+  if(ui.sort&&ui.sort!=='series'){$('libList').innerHTML=flatLib();return;}
   const S=bySeries();const qOrder=D.queue;
   const SA=new Map();for(const b of (S.get('Standalone')||[]))SA.set(b.t+'|',[b]);S.delete('Standalone');for(const [k,v] of SA)S.set(k,v);
   const PO={'High':0,'Medium':1,'Test First':2,'Low':3};
@@ -183,10 +203,10 @@ function renderLib(){
   for(const n of names){
     const all=S.get(n);const vis=all.filter(matches);if(!vis.length)continue;
     const g=grp(n);if(g!==lastG){out.push(`<div class="lgh">${GL[g]}</div>`);lastG=g;}
-    if(n.endsWith('|')){const b=all[0];out.push(`<div class="series"><button class="brow solo" data-act="book" data-id="${b.id}" data-drag="b">${cover(b,'','.36rem')}<span class="bt"><b class="series-n">${esc(b.t)}</b><span>${esc(author(b.a))} · Standalone${b.st==='Read'&&b.m?` · ${b.m} ${b.y}`:''}${b.no&&b.st!=='Read'?` · ${esc(b.no)}`:''}</span></span><span class="bright">${stPill(b)}${b.r!==''?stars(b.r,11):''}</span></button></div>`);continue;}
+    if(n.endsWith('|')){const b=all[0];out.push(`<div class="series"><button class="brow solo" data-act="book" data-id="${b.id}" data-drag="b">${cover(b,'','.36rem')}<span class="bt"><b class="series-n">${esc(b.t)}</b><span>${esc(author(b.a))} · Standalone${b.no&&b.st!=='Read'?` · ${esc(b.no)}`:''}</span>${readSpan(b)?`<span class="dline">${esc(readSpan(b))}</span>`:''}</span><span class="bright">${stPill(b)}${b.r!==''?stars(b.r,11):''}</span></button></div>`);continue;}
     const done=all.filter(b=>b.st==='Read').length;const open=ui.q||ui.open[n];
     const stackB=[...all].sort((a,b)=>(srcFor(b)?1:0)-(srcFor(a)?1:0)||(+a.n)-(+b.n)).slice(0,3).sort((a,b)=>(+a.n)-(+b.n));
-    out.push(`<div class="series" data-open="${open?1:0}"><button class="series-h" data-act="series" data-s="${esc(n)}" data-drag="s" aria-expanded="${!!open}"><span class="stack">${stackB.map(b=>cover(b,'','.42rem')).join('')}</span><span class="series-t"><span class="series-n">${esc(n)}</span><span class="series-a">${esc([...new Set(all.map(b=>author(b.a)))].join(' · '))}</span><span class="prog"><i style="width:${Math.round(done/all.length*100)}%"></i></span></span><span class="series-c">${done}/${all.length}<br>${ICON.chev}</span></button>${open?`<div class="blist">${vis.map(b=>`<button class="brow" data-act="book" data-id="${b.id}" data-drag="b">${cover(b,'','.3rem')}<span class="bt"><b>${esc(b.t)}</b><span>${fmtN(b.n)}${b.st==='Read'&&b.m?` · ${b.m} ${b.y}`:''}${b.no&&b.st!=='Read'?` · ${esc(b.no)}`:''}</span></span><span class="bright">${stPill(b)}${b.r!==''?stars(b.r,11):''}</span></button>`).join('')}<button class="brow addrow" data-act="addto" data-s="${esc(n)}"><span class="plus">+</span><span class="bt"><b>Add a book to ${esc(n)}</b></span><span></span></button></div>`:''}</div>`);
+    out.push(`<div class="series" data-open="${open?1:0}"><button class="series-h" data-act="series" data-s="${esc(n)}" data-drag="s" aria-expanded="${!!open}"><span class="stack">${stackB.map(b=>cover(b,'','.42rem')).join('')}</span><span class="series-t"><span class="series-n">${esc(n)}</span><span class="series-a">${esc([...new Set(all.map(b=>author(b.a)))].join(' · '))}</span><span class="prog"><i style="width:${Math.round(done/all.length*100)}%"></i></span></span><span class="series-c">${done}/${all.length}<br>${ICON.chev}</span></button>${open?`<div class="blist">${vis.map(b=>`<button class="brow" data-act="book" data-id="${b.id}" data-drag="b">${cover(b,'','.3rem')}<span class="bt"><b>${esc(b.t)}</b><span>${fmtN(b.n)}${b.no&&b.st!=='Read'?` · ${esc(b.no)}`:''}</span>${readSpan(b)?`<span class="dline">${esc(readSpan(b))}</span>`:''}</span><span class="bright">${stPill(b)}${b.r!==''?stars(b.r,11):''}</span></button>`).join('')}<button class="brow addrow" data-act="addto" data-s="${esc(n)}"><span class="plus">+</span><span class="bt"><b>Add a book to ${esc(n)}</b></span><span></span></button></div>`:''}</div>`);
   }
   $('libList').innerHTML=out.join('')||(books.length?`<div class="emptybox">Nothing matches. Try another filter.</div>`:`<div class="emptybox">Your library is empty. Tap Add a book, or import from Goodreads, StoryGraph or Libby from the menu.</div>`);
 }
@@ -1139,6 +1159,7 @@ document.addEventListener('change',async e=>{
   if(b&&t.dataset.act==='setnum'){b.n=parseFloat(t.value)||0;mark();renderAll();return;}
   if(b&&t.dataset.act==='setdate'){b[t.dataset.f]=t.value;if(t.dataset.f==='df'&&t.value){const d=fromISO(t.value);b.m=d.m;b.y=d.y;}mark();renderAll();bookSheet(sheetBook);return;}
   if(t.id==='prio'){ui.prio=t.value;saveUi();renderLib();}
+  if(t.id==='lsort'){ui.sort=t.value;if(['recent','oldest','high','low'].includes(ui.sort)&&ui.st==='Unread')ui.st='Read';saveUi();renderLib();}
 });
 $('q').addEventListener('input',e=>{ui.q=e.target.value.trim();renderLib();});
 

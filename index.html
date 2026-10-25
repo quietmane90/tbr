@@ -317,6 +317,7 @@ input.inp[type="date"]::-webkit-date-and-time-value{text-align:left}
 .pk-out{grid-template-columns:1fr}.pk-cv{border:0;background:none;padding:0;cursor:pointer}.pk-cv .cv{width:76px}
 .pk-t{display:grid;gap:4px;min-width:0}.pk-t b{font-family:var(--display);font-weight:800;font-size:1.02rem;line-height:1.15}.pk-why{font-size:.86rem;line-height:1.35}
 .pickbtn{display:inline-flex;align-items:center;gap:6px}
+.dline{font-size:.72rem;color:var(--faint);font-variant-numeric:tabular-nums}.sortrow{display:flex;align-items:center;gap:10px;justify-content:flex-end}.sortrow .lab{font-size:.72rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}.sortrow select{min-height:38px}
 /* phone fit: no sideways drift, no iOS focus zoom */
 html,body{max-width:100%;overflow-x:clip;overscroll-behavior-x:none}
 @media (pointer:coarse){input,select,textarea{font-size:16px!important}}
@@ -372,6 +373,7 @@ html,body{max-width:100%;overflow-x:clip;overscroll-behavior-x:none}
         <select class="sel" id="prio" aria-label="Priority"><option value="">Any priority</option><option>High</option><option>Medium</option><option value="Test First">Sample</option><option>Low</option></select>
       </div>
       <div class="pills" id="stchips"></div>
+      <label class="sortrow"><span class="lab">Sort</span><select class="sel" id="lsort" aria-label="Sort"><option value="series">By series</option><option value="recent">Recently read</option><option value="oldest">Oldest read</option><option value="high">Highest rated</option><option value="low">Lowest rated</option><option value="title">Title A to Z</option></select></label>
     </div>
     <p class="draghint" style="margin:-16px 0 0">Hold a book or series and drag it into Up next.</p>
     <div class="sec" id="libList"></div>
