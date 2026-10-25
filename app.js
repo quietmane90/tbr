@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.13.0';
+const VERSION='1.13.1';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -46,7 +46,7 @@ async function askPersist(){try{if(navigator.storage&&navigator.storage.persist&
 const ui={tab:'home',ly:'',lm:undefined,st:'Unread',prio:'',q:'',open:{},size:'4x5',hideInstall:false};
 try{const s=JSON.parse(localStorage.getItem('tbr-ui')||'null');if(s)Object.assign(ui,s,{q:''});}catch(e){}
 const hsh=(location.hash||'').slice(1);if(['home','log','library'].includes(hsh))ui.tab=hsh;
-function saveUi(){try{localStorage.setItem('tbr-ui',JSON.stringify({tab:ui.tab,ly:ui.ly,lm:ui.lm,st:ui.st,prio:ui.prio,open:ui.open,size:ui.size,rg:ui.rg,split:ui.split,theme:ui.theme,font:ui.font,mock:ui.mock,lay:ui.lay,phf:ui.phf,sort:ui.sort,hideInstall:ui.hideInstall}))}catch(e){}}
+function saveUi(){try{localStorage.setItem('tbr-ui',JSON.stringify({tab:ui.tab,ly:ui.ly,lm:ui.lm,st:ui.st,prio:ui.prio,open:ui.open,size:ui.size,rg:ui.rg,split:ui.split,theme:ui.theme,font:ui.font,mock:ui.mock,lay:ui.lay,phf:ui.phf,topN:ui.topN,sort:ui.sort,hideInstall:ui.hideInstall}))}catch(e){}}
 
 const byId=id=>books.find(b=>b.id===id);
 const nextId=()=>Math.max(0,...books.map(x=>x.id))+1;
@@ -223,6 +223,8 @@ function favOrder(){
   for(const b of rest){let k=out.findIndex(x=>rv(x)<rv(b));if(k<0)k=out.length;out.splice(k,0,b);}
   return out;
 }
+const topN=()=>{const n=ui.topN||10;return n==='all'?1e9:+n;};
+const topLabel=()=>(ui.topN||10)==='all'?'All time':`Top ${ui.topN||10}`;
 function favSet(list){D.fav=list.map(b=>b.id);}
 function favPill(){return `<button class="pill" data-act="year" data-y="all" aria-pressed="${ui.ly==='all'}">All time<span class="c">${books.filter(b=>b.st==='Read').length}</span></button>`;}
 function renderFav(){
@@ -230,7 +232,7 @@ function renderFav(){
   $('years').innerHTML=favPill()+years.map(y=>`<button class="pill" data-act="year" data-y="${y}" aria-pressed="false">${y}<span class="c">${period(y,'').length}</span></button>`).join('');
   $('months').innerHTML='';$('months').hidden=true;
   const L=favOrder();const ranked=(D.fav||[]).length>0;
-  $('logsum').innerHTML=`<div style="display:grid;gap:2px"><span class="big">All-time favorites</span><span class="muted" style="font-size:.85rem">${L.length} books · ${avg(L).toFixed(1)} average · ${L.filter(b=>+b.r===5).length} five-star</span></div>`;
+  $('logsum').innerHTML=`<div style="display:grid;gap:2px"><span class="big">All-time favorites</span><span class="muted" style="font-size:.85rem">${L.length} books · ${avg(L).toFixed(1)} average · ${L.filter(b=>+b.r===5).length} five-star</span></div><button class="btn gold small" data-act="share" ${L.length?'':'disabled'}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13M7 8l5-5 5 5M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg>Share</button>`;
   $('loggrid').innerHTML=L.length?`<p class="draghint" style="margin:0 0 12px">${ranked?'Hold and drag to rerank, or tap the number to move a book.':'Starts out by rating. Hold and drag to rerank, or tap the number to move a book.'} New reads slot in by their rating.</p><div class="series"><div class="blist" style="border-top:0">${L.map((b,i)=>{const yr=b.m&&b.y?`${b.m} ${b.y}`:(b.y||'');return `<button class="brow frow" data-act="book" data-id="${b.id}" data-drag="f" data-slot="${b.id}"><span class="fnum" data-act="favmove" data-id="${b.id}" role="button" aria-label="Move ${esc(b.t)}, now number ${i+1}">${i+1}</span>${cover(b,'','.3rem')}<span class="bt"><b>${esc(b.t)}</b><span>${b.s==='Standalone'?esc(author(b.a)):esc(b.s)+' '+fmtN(b.n)}</span>${yr?`<span class="dline">Read ${esc(yr)}</span>`:''}</span><span class="bright">${b.r!==''?stars(b.r,11):''}</span></button>`;}).join('')}</div></div>`:`<div class="emptybox">Finish a book and it shows up here.</div>`;
 }
 function favMoveTo(id,p){const L=favOrder();const i=L.findIndex(b=>b.id===id);if(i<0)return;const [b]=L.splice(i,1);p=Math.max(1,Math.min(L.length+1,Math.round(p)||1));L.splice(p-1,0,b);favSet(L);mark();renderLog();toast(`${b.t} is now #${p}`);}
@@ -1259,11 +1261,12 @@ function plan(n,W,H,minText,LF){
   }
   return best;
 }
+function rankBadge(ctx,n,x,y,w){const r=Math.max(15,Math.min(46,w*0.15));const cx=x+r*0.95,cy=y+r*0.95;const a=C.accent.replace('#','');const L=(parseInt(a.slice(0,2),16)*299+parseInt(a.slice(2,4),16)*587+parseInt(a.slice(4,6),16)*114)/255000;ctx.save();ctx.shadowColor='rgba(0,0,0,.35)';ctx.shadowBlur=r*0.5;ctx.shadowOffsetY=r*0.12;ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fillStyle=C.accent;ctx.fill();ctx.restore();ctx.save();ctx.fillStyle=L>0.55?'#14110C':'#FFFFFF';ctx.textAlign='center';ctx.textBaseline='alphabetic';let fs=r*(n>99?0.8:n>9?1.0:1.15);ctx.font=`800 ${fs}px ${C.bf}`;while(ctx.measureText(String(n)).width>r*1.6&&fs>8){fs-=1;ctx.font=`800 ${fs}px ${C.bf}`;}const M=ctx.measureText(String(n));ctx.fillText(String(n),cx,cy+(M.actualBoundingBoxAscent-M.actualBoundingBoxDescent)/2);ctx.restore();}
 async function render(kind,y,m,size,pg){
   if(ui.theme==='typewriter'){ui.theme='ink';if(!ui.font)ui.font='typewriter';}
   C=Object.assign({},THEMES[ui.theme]||THEMES.night,FONTS[ui.font]||FONTS.modern);
   const RG=kind==='range'?rangeInfo():null;
-  const full=RG?RG.list:period(y,m);if(!full.length)return null;const list=pg?pg.list:full;
+  const AT=kind==='all';const full=AT?favOrder().slice(0,topN()):RG?RG.list:period(y,m);if(!full.length)return null;const list=pg?pg.list:full;
   try{await Promise.all([`800 120px ${C.df}`,`700 32px ${C.bf}`,`600 30px ${C.bf}`,`800 30px ${C.bf}`,`400 30px ${C.df}`].map(f=>document.fonts.load(f)));}catch(e){}
   const [W0,H]=SIZES[size]||SIZES['4x5'];const SZ=SAFE[size],story=!!SZ,square=size==='1x1';
   const P=SZ?SZ.l:64,top=SZ?SZ.t:64,bot=SZ?SZ.b:0,footH=0;
@@ -1273,10 +1276,10 @@ async function render(kind,y,m,size,pg){
   if(C.glow){const glow=ctx.createRadialGradient(W0*0.85,-80,10,W0*0.85,-80,W0*0.9);glow.addColorStop(0,C.glow);glow.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=glow;ctx.fillRect(0,0,W0,H);}
   ctx.textBaseline='alphabetic';ctx.textAlign='left';
   const yl=RG?RG.yl:(kind==='month'?y:'');
-  const kick=(RG?RG.kick:(kind==='month'?'MONTHLY ROUNDUP':'YEAR IN BOOKS'))+(yl?'  ·  '+yl:'');
+  const kick=AT?'MY ALL-TIME FAVORITES':(RG?RG.kick:(kind==='month'?'MONTHLY ROUNDUP':'YEAR IN BOOKS'))+(yl?'  ·  '+yl:'');
   const ks=square?22:26;let kfs=ks;const pgw=0;const trk=ch=>ch===' '?1:5;for(;kfs>14;kfs--){ctx.font=`800 ${kfs}px ${C.bf}`;let tw=0;for(const chh of kick)tw+=ctx.measureText(chh).width+trk(chh);if(tw<=W-P*2-pgw)break;}ctx.fillStyle=C.accent;ctx.font=`800 ${kfs}px ${C.bf}`;let kx=P;for(const chh of kick){ctx.fillText(chh,kx,top+ks);kx+=ctx.measureText(chh).width+(chh===' '?1:5);}
-  const title=RG?RG.title:(kind==='month'?FULL[MI(m)]:y);
-  const compact=!!(pg&&pg.compact);
+  const title=AT?topLabel():RG?RG.title:(kind==='month'?FULL[MI(m)]:y);
+  const compact=!!(pg&&pg.compact)||AT;
   let fs=compact?(square?84:104):(square?118:(story?136:148));ctx.font=`800 ${fs}px ${C.df}`;
   while(ctx.measureText(title).width>W-P*2&&fs>60){fs-=4;ctx.font=`800 ${fs}px ${C.df}`;}
   const TM=fm(ctx,`800 ${fs}px ${C.df}`,'HdlJ0123456789'),TD=fm(ctx,`800 ${fs}px ${C.df}`,'gjpqy').d;ctx.font=`800 ${fs}px ${C.df}`;const tb=top+ks+26+TM.a;ctx.fillStyle=C.ink;ctx.fillText(title,P-4,tb);
@@ -1306,7 +1309,7 @@ async function render(kind,y,m,size,pg){
   const slots=shown.length+(extra?1:0);const gy=gy0+Math.max(0,(gridH-p.tot)*0.5);
   const pos=i=>{const r=Math.floor(i/p.cols),c=i%p.cols;const inRow=Math.min(p.cols,slots-r*p.cols);const rowW=inRow*p.cw+(inRow-1)*p.gap;return [P+(W-P*2-rowW)/2+c*(p.cw+p.gap),gy+r*(p.ch+p.gap*1.1)];};
   let tfsG=Math.round(Math.min(32,Math.max(16,p.cw*0.12)));const tW=p.cw+Math.min(p.gap*0.6,14);for(;tfsG>12;tfsG--){ctx.font=`700 ${tfsG}px ${C.bf}`;if(!shown.some(b=>String(b.t).split(/\s+/).some(w=>ctx.measureText(w).width>tW)))break;}
-  shown.forEach((b,i)=>{const [x,yy]=pos(i),ch=p.cw*1.5;drawCover(ctx,b,imgs[i],x,yy,p.cw,ch);
+  shown.forEach((b,i)=>{const [x,yy]=pos(i),ch=p.cw*1.5;drawCover(ctx,b,imgs[i],x,yy,p.cw,ch);if(AT)rankBadge(ctx,i+1,x,yy,p.cw);
     let ty=yy+ch+p.cw*0.08;
     if(b.r!==''){const rs=rateStr(b.r);let st=p.st,nf;
       for(;;){nf=Math.max(9,Math.round(st*0.92));ctx.font=`800 ${nf}px ${C.bf}`;const tot=st*5.64+st*0.4+ctx.measureText(rs).width;if(tot<=p.cw||st<=6)break;st-=1;}
@@ -1318,7 +1321,7 @@ async function render(kind,y,m,size,pg){
     ctx.fillStyle=C.muted;ctx.font=`700 ${Math.round(p.cw*0.11)}px ${C.bf}`;ctx.fillText('more',x+p.cw/2,yy+ch/2+p.cw*0.24);ctx.textAlign='left';}
   ctx.textAlign='left';
   let url;try{url=cv.toDataURL('image/png');}catch(e){if(noRemote)return null;return render2(kind,y,m,size);}
-  return{cv,url,name:`roundup-${RG?RG.tag:kind==='month'?`${y}-${pad2(MI(m)+1)}`:y}-${size}${pg&&pg.total>1?'-'+pg.no:''}.png`,shown:shown.length,extra};
+  return{cv,url,name:AT?`alltime-${topLabel().toLowerCase().replace(/ /g,'')}-${size}.png`:`roundup-${RG?RG.tag:kind==='month'?`${y}-${pad2(MI(m)+1)}`:y}-${size}${pg&&pg.total>1?'-'+pg.no:''}.png`,shown:shown.length,extra};
 }
 // If a cover from another site blocks drawing, redraw with only stored covers.
 async function render2(kind,y,m,size){noRemote=true;try{return await render(kind,y,m,size);}finally{noRemote=false;}}
@@ -1354,7 +1357,7 @@ document.addEventListener('change',e=>{const t=e.target;if(t.classList&&t.classL
 document.addEventListener('click',e=>{const t=e.target.closest('[data-act="rgq"]');if(t){rangeLast(+t.dataset.n);makeShare('range');}});
 async function renderPages(kind){
   if(ui.lay==='photo'){const r=await renderPhoto(kind,ui.size);return r?[r]:[];}
-  const y=ui.ly,m=kind==='month'?ui.lm:'';const split=kind==='month'?'one':(ui.split||'one');
+  const y=ui.ly,m=kind==='month'?ui.lm:'';const split=(kind==='month'||kind==='all')?'one':(ui.split||'one');
   if(split==='one'){const r=await render(kind,y,m,ui.size);return r?[r]:[];}
   let months=[];
   if(kind==='range'){const R=rangeInfo();const seen=new Set();for(const b of R.list){const k=b.y+'|'+b.m;if(!seen.has(k)){seen.add(k);months.push([b.y,b.m]);}}}
@@ -1420,14 +1423,14 @@ function paintPrev(){const el=$('sprev');if(!el||!lastImgs||!lastImgs.length)ret
 document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-act="mock"]');if(!t)return;ui.mock=t.dataset.v==='1';saveUi();t.parentElement.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b===t));paintPrev();const h=$('mockhint');if(h)h.hidden=!ui.mock;});
 /* ---------- photo collage: your photo in the middle, covers framing the sides ---------- */
 let phImg=null,phSeed=1,phT=null,phTimer=null;const phOff=new Set(),phOn=new Set();
-function phAll(kind){const RG=kind==='range'?rangeInfo():null;return RG?RG.list:period(ui.ly,kind==='month'?ui.lm:'');}
-function phPass(b){const f=ui.phf||'5';return f==='all'||(b.r!==''&&+b.r>=(f==='4'?4:5));}
+function phAll(kind){if(kind==='all')return favOrder().slice(0,topN());const RG=kind==='range'?rangeInfo():null;return RG?RG.list:period(ui.ly,kind==='month'?ui.lm:'');}
+function phPass(b){if(lastKind==='all')return true;const f=ui.phf||'5';return f==='all'||(b.r!==''&&+b.r>=(f==='4'?4:5));}
 function phInc(b){return phPass(b)&&!phOff.has(String(b.id));}
 function phList(kind){return phAll(kind).filter(phInc);}
 function phCount(kind){const a=phAll(kind).filter(phPass);return `${a.filter(phInc).length} of ${a.length} in the collage. Tap a cover to take it out or put it back in.`;}
 function phPicks(kind){return `<div class="phpicks" role="group" aria-label="Books in the collage">${phAll(kind).filter(phPass).map(b=>`<button data-act="phtog" data-id="${esc(String(b.id))}" aria-pressed="${phInc(b)}" aria-label="${esc(b.t)}">${cover(b,'','.3rem')}</button>`).join('')}</div><span class="hint" id="phcount">${phCount(kind)}</span>`;}
 function phWhen(kind){if(kind==='range')return 'from '+rangeInfo().head;if(kind==='month')return (ui.ly===THISYEAR&&MI(ui.lm)===NOW.getMonth())?'this month':'in '+FULL[MI(ui.lm)];return ui.ly===THISYEAR?'this year':'in '+ui.ly;}
-function phAuto(kind){const f=ui.phf||'5',w=phWhen(kind);return f==='all'?`Everything I read ${w}`:f==='4'?`Books I’ve rated 4★+ ${w}`:`Books I’ve rated 5★ ${w}`;}
+function phAuto(kind){if(kind==='all')return (ui.topN||10)==='all'?'My all-time favorite books':`My top ${ui.topN||10} books of all time`;const f=ui.phf||'5',w=phWhen(kind);return f==='all'?`Everything I read ${w}`:f==='4'?`Books I’ve rated 4★+ ${w}`:`Books I’ve rated 5★ ${w}`;}
 function phRand(seed){let a=seed>>>0;return()=>{a=(a+0x6D2B79F5)>>>0;let t=a;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296;};}
 /* headline text with ★ drawn as a real star so it never depends on the font having the glyph */
 function phSegW(ctx,s,fs){const parts=s.split('★');let w=0;parts.forEach((p,i)=>{w+=ctx.measureText(p).width;if(i<parts.length-1)w+=fs*0.86;});return w;}
@@ -1460,7 +1463,7 @@ async function renderPhoto(kind,size){
   const y0=hb,y1=H-B,avH=y1-y0,Z=(W-L-Rm)*(square?0.3:0.31);
   const fit=(n)=>{let best=null;const side=Math.ceil(n/2);for(let k=1;k<=4;k++){const gx=Z*0.07,rows=Math.ceil(side/k);const cwW=(Z-(k-1)*gx)/k;const cwH=avH/(1.5*(rows+(rows-1)*0.1+(k>1?0.55:0)));const cw=Math.min(cwW,cwH,W*0.27);if(!best||cw>best.cw+0.5)best={k,gx,rows,cw};}return best;};
   let list=all,p=fit(list.length);
-  if(p.cw<80){const rk=all.map((b,i)=>[i,b.r===''?0:+b.r]).sort((a,b)=>b[1]-a[1]||a[0]-b[0]);let n=all.length;while(p.cw<80&&n>2){n-=2;p=fit(n);}const keep=new Set(rk.slice(0,n).map(x=>x[0]));list=all.filter((b,i)=>keep.has(i));}
+  if(p.cw<80){const rk=all.map((b,i)=>[i,kind==='all'?0:b.r===''?0:+b.r]).sort((a,b)=>b[1]-a[1]||a[0]-b[0]);let n=all.length;while(p.cw<80&&n>2){n-=2;p=fit(n);}const keep=new Set(rk.slice(0,n).map(x=>x[0]));list=all.filter((b,i)=>keep.has(i));}
   const rnd=phRand(phSeed*7919+list.length);
   const order=list.map((b,i)=>i);if(phSeed>1)for(let i=order.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[order[i],order[j]]=[order[j],order[i]];}
   const imgs=await Promise.all(list.map(b=>imgForCanvas(b)));
@@ -1480,41 +1483,43 @@ async function renderPhoto(kind,size){
         let y=top+r*step+(k>1&&low?step*0.5:0);if(maxR===1&&k===1&&s===1)y+=ch*0.18;
         const jx=(rnd()-0.5)*gx*0.9,jy=(rnd()-0.5)*ch*0.06;
         const x=Math.max(L*0.5,Math.min(W-Rm*0.5-cw,x0+jx));y=Math.max(y0,Math.min(y1-ch,y+jy));
-        drawCover(ctx,list[ix],imgs[ix],x,y,cw,ch);});
+        drawCover(ctx,list[ix],imgs[ix],x,y,cw,ch);if(kind==='all')rankBadge(ctx,ix+1,x,y,cw);});
     });
   });
-  const tag=kind==='range'?rangeInfo().tag:kind==='month'?`${ui.ly}-${String(MI(ui.lm)+1).padStart(2,'0')}`:ui.ly;
+  const tag=kind==='all'?'alltime-'+topLabel().toLowerCase().replace(/ /g,''):kind==='range'?rangeInfo().tag:kind==='month'?`${ui.ly}-${String(MI(ui.lm)+1).padStart(2,'0')}`:ui.ly;
   return {cv,name:`collage-${tag}-${size}.png`,H,shown:list.length,extra:all.length-list.length,photo:true};
 }
 function phControls(kind){
   return `<div class="field"><span class="lab">Photo</span><div class="phrow"><label class="btn ghost small phpick">${phImg?'Change photo':'Choose photo'}<input type="file" id="phFile" accept="image/*"></label>${phImg?'<button class="btn ghost small" data-act="phclr">Remove</button>':''}<button class="btn ghost small" data-act="phshuf">Shuffle covers</button></div><span class="hint">Your photo stays on this device. It isn't saved to the app.</span></div>
-   <div class="field"><span class="lab">Books</span><div class="seg">${[['5','5★ only'],['4','4★ and up'],['all','Everything']].map(([v,l])=>`<button data-act="phf" data-v="${v}" aria-pressed="${(ui.phf||'5')===v}">${l}</button>`).join('')}</div>${phPicks(kind)}</div>
+   <div class="field"><span class="lab">Books</span><div class="seg" ${kind==='all'?'hidden':''}>${[['5','5★ only'],['4','4★ and up'],['all','Everything']].map(([v,l])=>`<button data-act="phf" data-v="${v}" aria-pressed="${(ui.phf||'5')===v}">${l}</button>`).join('')}</div>${phPicks(kind)}</div>
    <div class="field"><span class="lab">Headline</span><input class="inp" id="phT" maxlength="80" autocomplete="off" value="${esc(phT??phAuto(kind))}" placeholder="No headline"><span class="hint">Edit it however you like. Clear it for no headline.</span></div>`;
 }
 function shareMsg(rs){const r=rs[0];const [w,hh,l]=SIZES[ui.size];const m=$('smsg');if(!m)return;
   if(r.photo){m.textContent=`${w} × ${hh} px, ${l} size. ${phImg?'':'Add a photo of yourself and the covers frame the middle. '}${r.extra?`Showing your top ${r.shown} of ${r.shown+r.extra} so the covers stay readable. `:''}Shuffle rearranges the covers.`;return;}
   m.textContent=`${w} × ${hh} px, Instagram ${l.toLowerCase()} size.${r.extra?` Showing ${r.shown} of ${r.shown+r.extra} books; pick a taller size or a slide per month to fit them all.`:''}${rs.length>1?` ${rs.length} images, swipe to see them all.`:''} You can also press and hold the image to save it.`;}
 async function phRefresh(){const rs=await renderPages(lastKind);const el=$('sprev');if(!el)return;if(!rs.length){el.innerHTML=`<div class="emptybox">No books match. Try 4★ and up or Everything.</div>`;lastImgs=[];lastImg=null;return;}freeImgs(rs);lastImg=rs[0];lastImgs=rs;paintPrev();shareMsg(rs);}
-document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-act="lay"],[data-act="phf"],[data-act="phshuf"],[data-act="phclr"],[data-act="phtog"]');if(!t)return;const a=t.dataset.act;
+document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-act="lay"],[data-act="phf"],[data-act="phshuf"],[data-act="phclr"],[data-act="phtog"],[data-act="topn"]');if(!t)return;const a=t.dataset.act;
   if(a==='lay'){ui.lay=t.dataset.v;saveUi();makeShare(lastKind);}
   else if(a==='phtog'){const b=phAll(lastKind).find(x=>String(x.id)===t.dataset.id);if(!b)return;const k=String(b.id);if(phOff.has(k))phOff.delete(k);else phOff.add(k);t.setAttribute('aria-pressed',phInc(b));const c=$('phcount');if(c)c.textContent=phCount(lastKind);clearTimeout(phTimer);phTimer=setTimeout(phRefresh,300);}
   else if(a==='phf'){phOff.clear();phOn.clear();ui.phf=t.dataset.v;saveUi();makeShare(lastKind);}
+  else if(a==='topn'){ui.topN=t.dataset.v==='all'?'all':+t.dataset.v;phOff.clear();saveUi();makeShare('all');}
   else if(a==='phshuf'){phSeed=2+Math.floor(Math.random()*1e6);phRefresh();}
   else if(a==='phclr'){if(phImg&&phImg.getContext){phImg.width=phImg.height=0;}phImg=null;makeShare(lastKind);}});
 document.addEventListener('change',e=>{if(e.target.id!=='phFile')return;const f=e.target.files&&e.target.files[0];if(!f)return;const u=URL.createObjectURL(f);const i=new Image();i.onload=()=>{const sc=Math.min(1,2160/Math.max(i.naturalWidth,i.naturalHeight));const c=document.createElement('canvas');c.width=Math.round(i.naturalWidth*sc);c.height=Math.round(i.naturalHeight*sc);const x=c.getContext('2d');x.imageSmoothingQuality='high';x.drawImage(i,0,0,c.width,c.height);URL.revokeObjectURL(u);if(phImg&&phImg.getContext){phImg.width=phImg.height=0;}phImg=c;makeShare(lastKind);};i.onerror=()=>{const m=$('smsg');if(m)m.textContent='That photo could not be opened. Try a JPEG or PNG.';};i.src=u;});
 document.addEventListener('input',e=>{if(e.target.id!=='phT')return;const v=e.target.value;phT=v===phAuto(lastKind)?null:v;clearTimeout(phTimer);phTimer=setTimeout(phRefresh,350);});
 async function makeShare(kind){
-  kind=kind||(ui.lm?'month':'year');if(kind==='range')rangeInit();lastKind=kind;if(!SIZES[ui.size])ui.size='4x5';
+  kind=kind||(ui.ly==='all'?'all':ui.lm?'month':'year');if(kind==='range')rangeInit();lastKind=kind;if(!SIZES[ui.size])ui.size='4x5';
   const sz=Object.entries(SIZES).map(([k,[w,hh,l,rt]])=>`<button data-act="size" data-s="${k}" aria-pressed="${ui.size===k}"><span class="shape" style="width:${Math.round(22*w/hh)}px;height:22px"></span><b>${rt||k.replace('x',':')}</b><span>${l}</span></button>`).join('');
-  openSheet(`<div class="sh-head" style="grid-template-columns:1fr auto"><div style="display:grid;gap:4px"><span class="kicker">Share</span><h3>${kind==='range'?rangeInfo().head:kind==='month'?`${FULL[MI(ui.lm)]} ${ui.ly}`:ui.ly} roundup</h3></div>${X}</div>
-   <div class="seg">${ui.lm?`<button data-act="kind" data-k="month" aria-pressed="${kind==='month'}">Month</button>`:''}<button data-act="kind" data-k="range" aria-pressed="${kind==='range'}">Pick months</button><button data-act="kind" data-k="year" aria-pressed="${kind==='year'}">Whole year</button></div>
+  openSheet(`<div class="sh-head" style="grid-template-columns:1fr auto"><div style="display:grid;gap:4px"><span class="kicker">Share</span><h3>${kind==='all'?'All-time favorites':(kind==='range'?rangeInfo().head:kind==='month'?`${FULL[MI(ui.lm)]} ${ui.ly}`:ui.ly)+' roundup'}</h3></div>${X}</div>
+   ${kind==='all'?`<div class="field"><span class="lab">How many</span><div class="seg">${[5,10,20,50,'all'].map(v=>`<button data-act="topn" data-v="${v}" aria-pressed="${String(ui.topN||10)===String(v)}">${v==='all'?'All':'Top '+v}</button>`).join('')}</div></div>`:''}
+   <div class="seg" ${kind==='all'?'hidden':''}>${ui.lm?`<button data-act="kind" data-k="month" aria-pressed="${kind==='month'}">Month</button>`:''}<button data-act="kind" data-k="range" aria-pressed="${kind==='range'}">Pick months</button><button data-act="kind" data-k="year" aria-pressed="${kind==='year'}">Whole year</button></div>
    <div class="seg"><button data-act="lay" data-v="grid" aria-pressed="${ui.lay!=='photo'}">Roundup</button><button data-act="lay" data-v="photo" aria-pressed="${ui.lay==='photo'}">Photo collage</button></div>
    ${kind==='range'?rangeControls():''}
    ${ui.lay==='photo'?phControls(kind):''}
    <div class="sizes" role="group" aria-label="Image size">${sz}</div>
    <div class="field"><span class="lab">Colors</span><div class="themes">${Object.entries(THEMES).map(([k,t])=>`<button data-act="theme" data-v="${k}" aria-pressed="${(ui.theme||'night')===k}" aria-label="${t.name}"><span class="sw" style="background:${t.bg};border-color:${t.line}"><i style="background:${t.accent}"></i><em style="background:${t.ink}"></em></span><span class="tn">${t.name}</span></button>`).join('')}</div></div>
    <div class="field"><span class="lab">Font</span><div class="fonts">${Object.entries(FONTS).map(([k,f])=>`<button data-act="font" data-v="${k}" aria-pressed="${(ui.font||'modern')===k}"><b style="font-family:${f.df.replace(/"/g,"'")}">Aa</b><span>${f.name}</span></button>`).join('')}</div></div>
-   ${kind!=='month'&&ui.lay!=='photo'?`<div class="field"><span class="lab">Slides</span><div class="seg">${[['one','One image'],['months','By month'],['overview','Recap + months']].map(([v,l])=>`<button data-act="split" data-v="${v}" aria-pressed="${(ui.split||'one')===v}">${l}</button>`).join('')}</div><span class="hint">Multiple slides post together as an Instagram carousel.</span></div>`:''}
+   ${kind!=='month'&&kind!=='all'&&ui.lay!=='photo'?`<div class="field"><span class="lab">Slides</span><div class="seg">${[['one','One image'],['months','By month'],['overview','Recap + months']].map(([v,l])=>`<button data-act="split" data-v="${v}" aria-pressed="${(ui.split||'one')===v}">${l}</button>`).join('')}</div><span class="hint">Multiple slides post together as an Instagram carousel.</span></div>`:''}
    <div class="field"><span class="lab">Preview</span><div class="seg"><button data-act="mock" data-v="0" aria-pressed="${!ui.mock}">Clean</button><button data-act="mock" data-v="1" aria-pressed="${!!ui.mock}">In the app</button></div><span class="hint" id="mockhint" ${ui.mock?'':'hidden'}>A generic app layout over your image so you can see what gets covered. Save image always saves the clean version.</span></div>
    <div class="share-prev" id="sprev"><div class="emptybox">Drawing your roundup…</div></div>
    <div class="actions"><button class="btn gold" data-act="saveimg">${navigator.canShare?'Share or save':'Save image'}</button></div><span class="hint" id="smsg"></span>`);
