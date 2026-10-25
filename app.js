@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.17.7';
+const VERSION='1.17.8';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -46,7 +46,7 @@ async function askPersist(){try{if(navigator.storage&&navigator.storage.persist&
 const ui={tab:'home',ly:'',lm:undefined,st:'Unread',prio:'',q:'',open:{},size:'4x5',hideInstall:false};
 try{const s=JSON.parse(localStorage.getItem('tbr-ui')||'null');if(s)Object.assign(ui,s,{q:''});}catch(e){}
 const hsh=(location.hash||'').slice(1);if(['home','log','library'].includes(hsh))ui.tab=hsh;
-function saveUi(){try{localStorage.setItem('tbr-ui',JSON.stringify({tab:ui.tab,ly:ui.ly,lm:ui.lm,st:ui.st,prio:ui.prio,open:ui.open,size:ui.size,rg:ui.rg,split:ui.split,theme:ui.theme,font:ui.font,mock:ui.mock,lay:ui.lay,phf:ui.phf,topN:ui.topN,fm:ui.fm,cdt:ui.cdt,cdc:ui.cdc,rct:ui.rct,genst:ui.genst,rcgap:ui.rcgap,rcl1:ui.rcl1,rcl2:ui.rcl2,sort:ui.sort,hideInstall:ui.hideInstall}))}catch(e){}}
+function saveUi(){try{localStorage.setItem('tbr-ui',JSON.stringify({tab:ui.tab,ly:ui.ly,lm:ui.lm,st:ui.st,prio:ui.prio,open:ui.open,size:ui.size,rg:ui.rg,split:ui.split,theme:ui.theme,font:ui.font,mock:ui.mock,lay:ui.lay,phf:ui.phf,topN:ui.topN,fm:ui.fm,cdt:ui.cdt,cdc:ui.cdc,cdu:ui.cdu,rct:ui.rct,genst:ui.genst,rcgap:ui.rcgap,rcl1:ui.rcl1,rcl2:ui.rcl2,sort:ui.sort,hideInstall:ui.hideInstall}))}catch(e){}}
 
 const byId=id=>books.find(b=>b.id===id);
 const nextId=()=>Math.max(0,...books.map(x=>x.id))+1;
@@ -1519,12 +1519,12 @@ function shareMsg(rs){const r=rs[0];const [w,hh,l]=SIZES[ui.size];const m=$('sms
   if(r.photo){m.textContent=`${w} × ${hh} px, ${l} size. ${phImg?'':'Add a photo of yourself and the covers frame the middle. '}${r.extra?`Showing your top ${r.shown} of ${r.shown+r.extra} so the covers stay readable. `:''}Shuffle rearranges the covers.`;return;}
   m.textContent=`${w} × ${hh} px, ${l} size.${r.extra?` Showing ${r.shown} of ${r.shown+r.extra} books; pick a taller size or a slide per month to fit them all.`:''}${rs.length>1?` ${rs.length} images, swipe to see them all.`:''} You can also press and hold the image to save it.`;}
 async function phRefresh(){const rs=await renderPages(lastKind);const el=$('sprev');if(!el)return;if(!rs.length){el.innerHTML=`<div class="emptybox">${ui.lay==='recs'?'Add a pair to see your first slide.':'No books match. Try 4★ and up or Everything.'}</div>`;lastImgs=[];lastImg=null;return;}freeImgs(rs);lastImg=rs[0];lastImgs=rs;paintPrev();shareMsg(rs);}
-document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-act="lay"],[data-act="phf"],[data-act="phshuf"],[data-act="phclr"],[data-act="phtog"],[data-act="topn"],[data-act="cdt"],[data-act="cdc"]');if(!t)return;const a=t.dataset.act;
+document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-act="lay"],[data-act="phf"],[data-act="phshuf"],[data-act="phclr"],[data-act="phtog"],[data-act="topn"],[data-act="cdt"],[data-act="cdc"],[data-act="cdu"]');if(!t)return;const a=t.dataset.act;
   if(a==='lay'){ui.lay=t.dataset.v;saveUi();makeShare(lastKind);}
   else if(a==='phtog'){const b=phAll(lastKind).find(x=>String(x.id)===t.dataset.id);if(!b)return;const k=String(b.id);if(phOff.has(k))phOff.delete(k);else phOff.add(k);t.setAttribute('aria-pressed',phInc(b));const c=$('phcount');if(c)c.textContent=phCount(lastKind);clearTimeout(phTimer);phTimer=setTimeout(phRefresh,300);}
   else if(a==='phf'){phOff.clear();phOn.clear();ui.phf=t.dataset.v;saveUi();makeShare(lastKind);}
   else if(a==='topn'){ui.topN=t.dataset.v==='all'?'all':+t.dataset.v;phOff.clear();saveUi();makeShare('all');}
-  else if(a==='cdt'||a==='cdc'){ui[a]=t.dataset.v;saveUi();makeShare(lastKind);}
+  else if(a==='cdt'||a==='cdc'||a==='cdu'){ui[a]=t.dataset.v;saveUi();makeShare(lastKind);}
   else if(a==='phshuf'){phSeed=2+Math.floor(Math.random()*1e6);phRefresh();}
   else if(a==='phclr'){if(phImg&&phImg.getContext){phImg.width=phImg.height=0;}phImg=null;phGen=null;makeShare(lastKind);}});
 document.addEventListener('change',e=>{if(e.target.id!=='phFile')return;const f=e.target.files&&e.target.files[0];if(!f)return;const u=URL.createObjectURL(f);const i=new Image();i.onload=()=>{const sc=Math.min(1,2160/Math.max(i.naturalWidth,i.naturalHeight));const c=document.createElement('canvas');c.width=Math.round(i.naturalWidth*sc);c.height=Math.round(i.naturalHeight*sc);const x=c.getContext('2d');x.imageSmoothingQuality='high';x.drawImage(i,0,0,c.width,c.height);URL.revokeObjectURL(u);if(phImg&&phImg.getContext){phImg.width=phImg.height=0;}phGen=null;phImg=c;makeShare(lastKind);};i.onerror=()=>{const m=$('smsg');if(m)m.textContent='That photo could not be opened. Try a JPEG or PNG.';};i.src=u;});
@@ -1540,17 +1540,23 @@ function cdBg(ctx,W,H,img){
 }
 function cdKicker(ctx,text,x,y,W){let fs=26;const trk=5;for(;fs>14;fs--){ctx.font=`800 ${fs}px ${C.bf}`;let w=0;for(const ch of text)w+=ctx.measureText(ch).width+trk;if(w<=W)break;}ctx.fillStyle=C.accent;ctx.textAlign='left';ctx.textBaseline='alphabetic';let cx=x;for(const ch of text){ctx.fillText(ch,cx,y);cx+=ctx.measureText(ch).width+trk;}return fs;}
 /* the books that make up a series: numbered main books in order, or everything if none are numbered */
-function cdSeriesBooks(name){const all=(bySeries().get(name)||[]).filter(b=>b.av!=='No'||b.st==='Read').sort((a,b)=>(+a.n)-(+b.n));const main=all.filter(b=>Number.isInteger(+b.n)&&+b.n>0);return main.length?main:all;}
-const cdCount=n=>`${n} book${n===1?'':'s'}`;
+const cdUp=b=>b.av==='No'&&b.st!=='Read';
+function cdUpText(b){const m=String(b.no||'').match(/[A-Z][a-z]{2,8}\.? \d{1,2}, \d{4}|[A-Z][a-z]{2,8} \d{4}|\b20\d\d\b/);return m?'Coming '+m[0]:'Coming soon';}
+function cdUpTag(ctx,b,x,y,w,h){if(!cdUp(b))return;/* dark band across the bottom of an unreleased cover */
+  ctx.save();rr(ctx,x,y,w,h,Math.max(4,w*0.035));ctx.clip();const bh=h*0.27;ctx.fillStyle='rgba(8,8,10,.92)';ctx.fillRect(x,y+h-bh,w,bh);
+  ctx.fillStyle='#FFFFFF';ctx.textAlign='center';ctx.textBaseline='alphabetic';let f1=Math.round(w*0.075),t1='NOT OUT YET';ctx.font=`800 ${f1}px ${C.bf}`;while(ctx.measureText(t1).width>w*0.86&&f1>8){f1--;ctx.font=`800 ${f1}px ${C.bf}`;}
+  ctx.globalAlpha=0.75;ctx.fillText(t1,x+w/2,y+h-bh*0.58);ctx.globalAlpha=1;let f2=Math.round(w*0.095);const t2=cdUpText(b);ctx.font=`800 ${f2}px ${C.df}`;while(ctx.measureText(t2).width>w*0.88&&f2>8){f2--;ctx.font=`800 ${f2}px ${C.df}`;}ctx.fillText(t2,x+w/2,y+h-bh*0.22);ctx.restore();}
+function cdSeriesBooks(name,up){const all=(bySeries().get(name)||[]).filter(b=>up||!cdUp(b)).sort((a,b)=>(+a.n)-(+b.n));const main=all.filter(b=>Number.isInteger(+b.n)&&+b.n>0);return main.length?main:all;}
+const cdCount=(n,u)=>`${n} book${n===1?'':'s'}${u?` + ${u} coming`:''}`;
 function cdSticker(ctx,b,img,cx,cy,w,h,rot){/* a cover tilted a little, lifted off the photo with a soft shadow */
-  ctx.save();ctx.translate(cx,cy);ctx.rotate(rot);const keep=C.shadow;C.shadow='rgba(0,0,0,.38)';drawCover(ctx,b,img,-w/2,-h/2,w,h);C.shadow=keep;ctx.restore();}
+  ctx.save();ctx.translate(cx,cy);ctx.rotate(rot);const keep=C.shadow;C.shadow='rgba(0,0,0,.38)';drawCover(ctx,b,img,-w/2,-h/2,w,h);C.shadow=keep;cdUpTag(ctx,b,-w/2,-h/2,w,h);ctx.restore();}
 /* lay out one or more covers inside a box: biggest even grid that fits, last row centered */
 function cdGrid(ctx,items,box,sticker,seed,maxW){
   const n=items.length;const gap=box.w*(sticker?0.06:0.035);let best=null;
   for(let cols=1;cols<=n;cols++){const rows=Math.ceil(n/cols);const cw=Math.min((box.w-gap*(cols-1))/cols,((box.h-gap*(rows-1))/rows)/1.5,maxW);if(!best||cw>best.cw+0.5)best={cols,rows,cw};}
   const {cols,rows,cw}=best,ch=cw*1.5,totH=rows*ch+(rows-1)*gap,y0=box.y+(box.h-totH)/2;const rnd=phRand(seed);
   items.forEach((it,i)=>{const r=Math.floor(i/cols),c=i%cols;const inRow=Math.min(cols,n-r*cols);const rowW=inRow*cw+(inRow-1)*gap;const x=box.x+(box.w-rowW)/2+c*(cw+gap),y=y0+r*(ch+gap);
-    if(sticker)cdSticker(ctx,it.b,it.img,x+cw/2+(rnd()-0.5)*gap*0.5,y+ch/2+(rnd()-0.5)*gap*0.5,cw,ch,(rnd()-0.5)*0.13);else drawCover(ctx,it.b,it.img,x,y,cw,ch);});
+    if(sticker)cdSticker(ctx,it.b,it.img,x+cw/2+(rnd()-0.5)*gap*0.5,y+ch/2+(rnd()-0.5)*gap*0.5,cw,ch,(rnd()-0.5)*0.13);else{drawCover(ctx,it.b,it.img,x,y,cw,ch);cdUpTag(ctx,it.b,x,y,cw,ch);}});
 }
 /* lo-fi countdown: your selfie on every slide, caption-style text, covers held up like stickers */
 function lfPhoto(ctx,W,H){const s=Math.max(W/phImg.width,H/phImg.height),iw=phImg.width*s,ih=phImg.height*s;ctx.imageSmoothingQuality='high';ctx.drawImage(phImg,(W-iw)/2,(H-ih)/2,iw,ih);}
@@ -1560,7 +1566,7 @@ function lfText(ctx,lines,cx,y,fs,wt,lh){/* white caption text with a soft dark 
   lines.forEach((l,i)=>{const yy=y+i*lh;ctx.shadowColor='rgba(0,0,0,.45)';ctx.shadowBlur=fs*0.18;ctx.shadowOffsetY=fs*0.03;ctx.strokeStyle='rgba(0,0,0,.28)';ctx.lineWidth=Math.max(2,fs*0.07);ctx.strokeText(l,cx,yy);ctx.shadowColor='transparent';ctx.fillStyle='#FFFFFF';ctx.fillText(l,cx,yy);});
   ctx.restore();}
 function lfFit(ctx,text,maxW,fs0,minFs,maxL,wt){let fs=fs0,ls;for(;fs>minFs;fs-=2){ctx.font=`${wt} ${fs}px ${C.df}`;ls=wrap(ctx,text,maxW,9);if(ls.length<=maxL&&String(text).split(/\s+/).every(w=>ctx.measureText(w).width<=maxW))break;}ctx.font=`${wt} ${fs}px ${C.df}`;return {fs,ls:wrap(ctx,text,maxW,maxL)};}
-function cdSub(b,S,withAuthor){const parts=[];if(withAuthor)parts.push(author(b.a));if(S)parts.push(cdCount(b.count));else if(withAuthor&&b.s!=='Standalone')parts.push(`${b.s} ${fmtN(b.n)}`);return parts.join('  ·  ');}
+function cdSub(b,S,withAuthor){const parts=[];if(withAuthor)parts.push(author(b.a));if(S)parts.push(cdCount(b.count,b.upc));else if(withAuthor&&b.s!=='Standalone')parts.push(`${b.s} ${fmtN(b.n)}`);return parts.join('  ·  ');}
 async function renderLofi(size,list,sets,N,S,TXT){
   const [W,H]=SIZES[size]||SIZES['4x5'];const SZ=SAFE[size];
   const L=SZ?SZ.l:60,Rm=SZ?SZ.r:60,T=SZ?SZ.t:64,B=SZ?SZ.b:64,cw=W-L-Rm,cx=L+cw/2;const word=S?'series':'books';const out=[];
@@ -1595,12 +1601,12 @@ async function renderCountdown(size){
   const S=FM()==='s',all=favOrder(),N=Math.min(all.length,topN(),19);if(!N)return [];
   const TXT=ui.cdt!=='off',ALLC=S&&ui.cdc==='all';
   const list=all.slice(0,N);const word=S?'series':'books';
-  if(S)for(const b of list)b.count=cdSeriesBooks(b.t).length;
+  const UP=ui.cdu==='show';if(S)for(const b of list){b.count=cdSeriesBooks(b.t,false).length;b.upc=UP?cdSeriesBooks(b.t,true).length-b.count:0;}
   const [W,H]=SIZES[size]||SIZES['4x5'];const SZ=SAFE[size];
   const L=SZ?SZ.l:72,Rm=SZ?SZ.r:72,T=SZ?SZ.t:70,B=SZ?SZ.b:70,cw=W-L-Rm;
   const kick=`MY TOP ${N} ${S?'SERIES':'BOOKS'} OF ALL TIME`;const out=[];
   const load=b=>typeof imgForCanvas==='function'?imgForCanvas(b.cb||b):(b.c?loadImg(b.c):null);
-  const sets=await Promise.all(list.map(async b=>{const bs=ALLC?cdSeriesBooks(b.t):[b.cb||b];const im=await Promise.all(bs.map(load));return bs.map((x,k)=>({b:x,img:im[k]}));}));
+  const sets=await Promise.all(list.map(async b=>{const bs=ALLC?cdSeriesBooks(b.t,UP):[b.cb||b];const im=await Promise.all(bs.map(load));return bs.map((x,k)=>({b:x,img:im[k]}));}));
   if(phImg)return renderLofi(size,list,sets,N,S,TXT);
   /* intro slide */
   {const cv=document.createElement('canvas');cv.width=W;cv.height=H;const ctx=cv.getContext('2d');cdBg(ctx,W,H,null);
@@ -1787,7 +1793,7 @@ async function makeShare(kind){
   openSheet(`<div class="sh-head" style="grid-template-columns:1fr auto"><div style="display:grid;gap:4px"><span class="kicker">Share</span><h3>${kind==='all'?(FM()==='s'?'All-time favorite series':'All-time favorites'):(kind==='range'?rangeInfo().head:kind==='month'?`${FULL[MI(ui.lm)]} ${ui.ly}`:ui.ly)+' roundup'}</h3></div>${X}</div>
    ${kind==='all'&&ui.lay!=='recs'?`<div class="field"><span class="lab">How many</span><div class="seg">${[5,10,20,50,'all'].map(v=>`<button data-act="topn" data-v="${v}" aria-pressed="${String(ui.topN||10)===String(v)}">${v==='all'?'All':'Top '+v}</button>`).join('')}</div></div>`:''}
    <div class="seg" ${kind==='all'?'hidden':''}>${ui.lm?`<button data-act="kind" data-k="month" aria-pressed="${kind==='month'}">Month</button>`:''}<button data-act="kind" data-k="range" aria-pressed="${kind==='range'}">Pick months</button><button data-act="kind" data-k="year" aria-pressed="${kind==='year'}">Whole year</button></div>
-   <div class="seg"><button data-act="lay" data-v="grid" aria-pressed="${ui.lay!=='photo'&&!((ui.lay==='count'||ui.lay==='recs')&&kind==='all')}">Roundup</button><button data-act="lay" data-v="photo" aria-pressed="${ui.lay==='photo'}">Collage</button>${kind==='all'?`<button data-act="lay" data-v="count" aria-pressed="${ui.lay==='count'}">Countdown</button><button data-act="lay" data-v="recs" aria-pressed="${ui.lay==='recs'}">If you like</button>`:''}</div>${kind==='all'&&ui.lay==='recs'?rcControls():''}${kind==='all'&&ui.lay==='count'?`<span class="hint">An intro slide, then one slide per pick from #${Math.min(topN(),19,favOrder().length)} down to #1. Post them together as a carousel.</span><div class="field"><span class="lab">Selfie</span><div class="phrow"><label class="btn ghost small phpick">${phImg?'Change photo':'Choose photo'}<input type="file" id="phFile" accept="image/*"></label>${phImg?'<button class="btn ghost small" data-act="phclr">Remove</button>':''}</div><span class="hint">Add a selfie for the lo-fi look: your photo on every slide with caption-style text. Leave it empty for the clean version.</span></div><div class="field"><span class="lab">Text on slides</span><div class="seg"><button data-act="cdt" data-v="on" aria-pressed="${ui.cdt!=='off'}">On</button><button data-act="cdt" data-v="off" aria-pressed="${ui.cdt==='off'}">Off</button></div><span class="hint">Turn it off to add your own text in Instagram or TikTok.</span></div>${FM()==='s'?`<div class="field"><span class="lab">Covers</span><div class="seg"><button data-act="cdc" data-v="one" aria-pressed="${ui.cdc!=='all'}">First book</button><button data-act="cdc" data-v="all" aria-pressed="${ui.cdc==='all'}">Whole series</button></div></div>`:''}`:''}
+   <div class="seg"><button data-act="lay" data-v="grid" aria-pressed="${ui.lay!=='photo'&&!((ui.lay==='count'||ui.lay==='recs')&&kind==='all')}">Roundup</button><button data-act="lay" data-v="photo" aria-pressed="${ui.lay==='photo'}">Collage</button>${kind==='all'?`<button data-act="lay" data-v="count" aria-pressed="${ui.lay==='count'}">Countdown</button><button data-act="lay" data-v="recs" aria-pressed="${ui.lay==='recs'}">If you like</button>`:''}</div>${kind==='all'&&ui.lay==='recs'?rcControls():''}${kind==='all'&&ui.lay==='count'?`<span class="hint">An intro slide, then one slide per pick from #${Math.min(topN(),19,favOrder().length)} down to #1. Post them together as a carousel.</span><div class="field"><span class="lab">Selfie</span><div class="phrow"><label class="btn ghost small phpick">${phImg?'Change photo':'Choose photo'}<input type="file" id="phFile" accept="image/*"></label>${phImg?'<button class="btn ghost small" data-act="phclr">Remove</button>':''}</div><span class="hint">Add a selfie for the lo-fi look: your photo on every slide with caption-style text. Leave it empty for the clean version.</span></div><div class="field"><span class="lab">Text on slides</span><div class="seg"><button data-act="cdt" data-v="on" aria-pressed="${ui.cdt!=='off'}">On</button><button data-act="cdt" data-v="off" aria-pressed="${ui.cdt==='off'}">Off</button></div><span class="hint">Turn it off to add your own text in Instagram or TikTok.</span></div>${FM()==='s'?`<div class="field"><span class="lab">Covers</span><div class="seg"><button data-act="cdc" data-v="one" aria-pressed="${ui.cdc!=='all'}">First book</button><button data-act="cdc" data-v="all" aria-pressed="${ui.cdc==='all'}">Whole series</button></div></div>${ui.cdc==='all'?`<div class="field"><span class="lab">Books not out yet</span><div class="seg"><button data-act="cdu" data-v="hide" aria-pressed="${ui.cdu!=='show'}">Leave off</button><button data-act="cdu" data-v="show" aria-pressed="${ui.cdu==='show'}">Show as coming</button></div><span class="hint">Shows them with a "Not out yet" label and the release date when there is one.</span></div>`:''}`:''}`:''}
    ${kind==='range'?rangeControls():''}
    ${ui.lay==='photo'?phControls(kind):''}
    <div class="sizes" role="group" aria-label="Image size">${sz}</div>
