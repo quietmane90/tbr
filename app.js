@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.12.2';
+const VERSION='1.12.3';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -1384,10 +1384,10 @@ document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest
 let phImg=null,phSeed=1,phT=null,phTimer=null;const phOff=new Set(),phOn=new Set();
 function phAll(kind){const RG=kind==='range'?rangeInfo():null;return RG?RG.list:period(ui.ly,kind==='month'?ui.lm:'');}
 function phPass(b){const f=ui.phf||'5';return f==='all'||(b.r!==''&&+b.r>=(f==='4'?4:5));}
-function phInc(b){const k=String(b.id);return phOn.has(k)||(phPass(b)&&!phOff.has(k));}
+function phInc(b){return phPass(b)&&!phOff.has(String(b.id));}
 function phList(kind){return phAll(kind).filter(phInc);}
-function phCount(kind){const a=phAll(kind);return `${a.filter(phInc).length} of ${a.length} books in the collage. Tap a cover to take it out or put it back in.`;}
-function phPicks(kind){return `<div class="phpicks" role="group" aria-label="Books in the collage">${phAll(kind).map(b=>`<button data-act="phtog" data-id="${esc(String(b.id))}" aria-pressed="${phInc(b)}" aria-label="${esc(b.t)}">${cover(b,'','.3rem')}</button>`).join('')}</div><span class="hint" id="phcount">${phCount(kind)}</span>`;}
+function phCount(kind){const a=phAll(kind).filter(phPass);return `${a.filter(phInc).length} of ${a.length} in the collage. Tap a cover to take it out or put it back in.`;}
+function phPicks(kind){return `<div class="phpicks" role="group" aria-label="Books in the collage">${phAll(kind).filter(phPass).map(b=>`<button data-act="phtog" data-id="${esc(String(b.id))}" aria-pressed="${phInc(b)}" aria-label="${esc(b.t)}">${cover(b,'','.3rem')}</button>`).join('')}</div><span class="hint" id="phcount">${phCount(kind)}</span>`;}
 function phWhen(kind){if(kind==='range')return 'from '+rangeInfo().head;if(kind==='month')return (ui.ly===THISYEAR&&MI(ui.lm)===NOW.getMonth())?'this month':'in '+FULL[MI(ui.lm)];return ui.ly===THISYEAR?'this year':'in '+ui.ly;}
 function phAuto(kind){const f=ui.phf||'5',w=phWhen(kind);return f==='all'?`Everything I read ${w}`:f==='4'?`Books I’ve rated 4★+ ${w}`:`Books I’ve rated 5★ ${w}`;}
 function phRand(seed){let a=seed>>>0;return()=>{a=(a+0x6D2B79F5)>>>0;let t=a;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296;};}
@@ -1459,7 +1459,7 @@ function shareMsg(rs){const r=rs[0];const [w,hh,l]=SIZES[ui.size];const m=$('sms
 async function phRefresh(){const rs=await renderPages(lastKind);const el=$('sprev');if(!el)return;if(!rs.length){el.innerHTML=`<div class="emptybox">No books match. Try 4★ and up or Everything.</div>`;lastImgs=[];lastImg=null;return;}lastImg=rs[0];lastImgs=rs;paintPrev();shareMsg(rs);}
 document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-act="lay"],[data-act="phf"],[data-act="phshuf"],[data-act="phclr"],[data-act="phtog"]');if(!t)return;const a=t.dataset.act;
   if(a==='lay'){ui.lay=t.dataset.v;saveUi();makeShare(lastKind);}
-  else if(a==='phtog'){const b=phAll(lastKind).find(x=>String(x.id)===t.dataset.id);if(!b)return;const k=String(b.id);if(phInc(b)){if(phOn.has(k))phOn.delete(k);else phOff.add(k);}else{if(phOff.has(k))phOff.delete(k);else phOn.add(k);}t.setAttribute('aria-pressed',phInc(b));const c=$('phcount');if(c)c.textContent=phCount(lastKind);clearTimeout(phTimer);phTimer=setTimeout(phRefresh,300);}
+  else if(a==='phtog'){const b=phAll(lastKind).find(x=>String(x.id)===t.dataset.id);if(!b)return;const k=String(b.id);if(phOff.has(k))phOff.delete(k);else phOff.add(k);t.setAttribute('aria-pressed',phInc(b));const c=$('phcount');if(c)c.textContent=phCount(lastKind);clearTimeout(phTimer);phTimer=setTimeout(phRefresh,300);}
   else if(a==='phf'){phOff.clear();phOn.clear();ui.phf=t.dataset.v;saveUi();makeShare(lastKind);}
   else if(a==='phshuf'){phSeed=2+Math.floor(Math.random()*1e6);phRefresh();}
   else if(a==='phclr'){phImg=null;makeShare(lastKind);}});
