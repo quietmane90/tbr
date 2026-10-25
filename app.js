@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.12.3';
+const VERSION='1.12.4';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -1190,14 +1190,14 @@ function rr(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w
 function splitW(ctx,ws,maxW){const o=[];for(const w of ws){if(ctx.measureText(w).width<=maxW||w.length<4){o.push(w);continue;}const cs=[...w];let k=2,parts;for(;k<=cs.length;k++){const n=Math.ceil(cs.length/k);parts=[];for(let i=0;i<cs.length;i+=n)parts.push(cs.slice(i,i+n).join(''));if(parts.every((pt,j)=>ctx.measureText(pt+(j<parts.length-1?'-':'')).width<=maxW))break;}parts.forEach((pt,j)=>o.push(pt+(j<parts.length-1?'-':'')));}return o;}
 function wrapG(ctx,ws,maxW){ws=splitW(ctx,ws,maxW);const ls=[];let cur='';for(const w of ws){const t=cur?cur+' '+w:w;if(ctx.measureText(t).width<=maxW||!cur)cur=t;else{ls.push(cur);cur=w;}}if(cur)ls.push(cur);return ls;}
 function wrap(ctx,text,maxW,maxL){const ws=String(text).trim().split(/\s+/);let ls=wrapG(ctx,ws,maxW);if(ls.length>1&&ls.length<=maxL){const n=ls.length;let lo=Math.min(maxW,Math.max(...ws.map(w=>ctx.measureText(w).width))),hi=maxW;for(let k=0;k<14&&hi-lo>0.5;k++){const mid=(lo+hi)/2;if(wrapG(ctx,ws,mid).length<=n)hi=mid;else lo=mid;}ls=wrapG(ctx,ws,hi);}if(ls.length>maxL){ls.length=maxL;let l=ls[maxL-1];while(ctx.measureText(l+'…').width>maxW&&l.length>1)l=l.slice(0,-1);ls[maxL-1]=l.trimEnd()+'…';}return ls;}
-function loadImg(src,cors){return new Promise(res=>{const i=new Image();if(cors)i.crossOrigin='anonymous';i.referrerPolicy='no-referrer';i.onload=()=>res(i);i.onerror=()=>res(null);i.src=src;});}
+const IMGC=new Map();function loadImg(src,cors){const key=(cors?'1':'0')+src;if(IMGC.has(key))return IMGC.get(key);const pr=new Promise(res=>{const i=new Image();if(cors)i.crossOrigin='anonymous';i.referrerPolicy='no-referrer';i.onload=()=>{(i.decode?i.decode().catch(()=>{}):Promise.resolve()).then(()=>res(i.naturalWidth>1?i:null));};i.onerror=()=>res(null);i.src=src;});IMGC.set(key,pr);pr.then(v=>{if(!v)IMGC.delete(key);});return pr;}
 let noRemote=false;
 async function imgForCanvas(b){const s=srcFor(b);if(!s)return null;if(b.c==='idb')return loadImg(s,false);if(noRemote)return null;return loadImg(s,true);}
 function drawCover(ctx,b,img,x,y,w,h){
   const rad=Math.max(4,w*0.035);
   ctx.save();ctx.shadowColor=C.shadow;ctx.shadowBlur=w*0.18;ctx.shadowOffsetY=w*0.06;ctx.fillStyle='#000';rr(ctx,x,y,w,h,rad);ctx.fill();ctx.restore();
   ctx.save();rr(ctx,x,y,w,h,rad);ctx.clip();
-  if(img){const s=Math.max(w/img.width,h/img.height),iw=img.width*s,ih=img.height*s;ctx.imageSmoothingQuality='high';ctx.drawImage(img,x+(w-iw)/2,y+(h-ih)/2,iw,ih);}
+  if(img){const [ga,gz]=hue(b.s+b.t);const gg=ctx.createLinearGradient(x,y,x+w*.6,y+h);gg.addColorStop(0,ga);gg.addColorStop(1,gz);ctx.fillStyle=gg;ctx.fillRect(x,y,w,h);const s=Math.max(w/img.width,h/img.height),iw=img.width*s,ih=img.height*s;ctx.imageSmoothingQuality='high';ctx.drawImage(img,x+(w-iw)/2,y+(h-ih)/2,iw,ih);}
   else{const [a,z]=hue(b.s+b.t);const g=ctx.createLinearGradient(x,y,x+w*.6,y+h);g.addColorStop(0,a);g.addColorStop(1,z);ctx.fillStyle=g;ctx.fillRect(x,y,w,h);
     ctx.fillStyle='rgba(255,255,255,.16)';ctx.fillRect(x+w*0.07,y,Math.max(2,w*0.012),h);
     const pad=w*0.14;let fs=w*0.16,ls;for(;fs>8;fs-=1){ctx.font=`800 ${fs}px ${C.df}`;ls=wrap(ctx,b.t,w-pad*1.6,5);if(ls.length*fs*1.05<=h*0.55&&String(b.t).split(/\s+/).every(q=>ctx.measureText(q).width<=w-pad*1.6))break;}
@@ -1377,6 +1377,7 @@ function mockup(src,size){
     x.fillStyle='#000';x.fillRect(0,H-150,W,150);for(let i=0;i<5;i++){if(i===2){x.fillStyle=wh;x.beginPath();x.roundRect(W/2-56,H-112,112,64,16);x.fill();mkText(x,'+',W/2,H-81,48,'800','#000','center');continue;}x.fillStyle=i===0?wh:'rgba(255,255,255,.6)';x.beginPath();x.roundRect(W/10+i*W/5-22,H-110,44,44,10);x.fill();}
   }
   return c;}
+function freeImgs(keep){for(const x of (lastImgs||[]))if(x&&x.cv&&!(keep||[]).includes(x)){x.cv.width=0;x.cv.height=0;}}
 function paintPrev(){const el=$('sprev');if(!el||!lastImgs||!lastImgs.length)return;const m=!!ui.mock,cv=x=>m?mockup(x.cv,ui.size):x.cv;
   el.innerHTML=lastImgs.length===1?`<img alt="Roundup image" src="${cv(lastImgs[0]).toDataURL('image/png')}">`:`<div class="sprev-strip">${lastImgs.map((x,i)=>`<img alt="Roundup image ${i+1} of ${lastImgs.length}" src="${cv(x).toDataURL('image/png')}">`).join('')}</div>`;}
 document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-act="mock"]');if(!t)return;ui.mock=t.dataset.v==='1';saveUi();t.parentElement.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b===t));paintPrev();const h=$('mockhint');if(h)h.hidden=!ui.mock;});
@@ -1425,7 +1426,7 @@ async function renderPhoto(kind,size){
   if(p.cw<80){const rk=all.map((b,i)=>[i,b.r===''?0:+b.r]).sort((a,b)=>b[1]-a[1]||a[0]-b[0]);let n=all.length;while(p.cw<80&&n>2){n-=2;p=fit(n);}const keep=new Set(rk.slice(0,n).map(x=>x[0]));list=all.filter((b,i)=>keep.has(i));}
   const rnd=phRand(phSeed*7919+list.length);
   const order=list.map((b,i)=>i);if(phSeed>1)for(let i=order.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[order[i],order[j]]=[order[j],order[i]];}
-  const imgs=await Promise.all(list.map(b=>b.c?loadImg(b.c):null));
+  const imgs=await Promise.all(list.map(b=>imgForCanvas(b)));
   const {k,gx,cw}=p,ch=cw*1.5,blockW=k*cw+(k-1)*gx;
   C.shadow=onPhoto?'rgba(0,0,0,.5)':C.shadow;
   const sides=[[],[]];order.forEach((ix,i)=>sides[i%2].push(ix));
@@ -1456,14 +1457,14 @@ function phControls(kind){
 function shareMsg(rs){const r=rs[0];const [w,hh,l]=SIZES[ui.size];const m=$('smsg');if(!m)return;
   if(r.photo){m.textContent=`${w} × ${hh} px, ${l} size. ${phImg?'':'Add a photo of yourself and the covers frame the middle. '}${r.extra?`Showing your top ${r.shown} of ${r.shown+r.extra} so the covers stay readable. `:''}Shuffle rearranges the covers.`;return;}
   m.textContent=`${w} × ${hh} px, Instagram ${l.toLowerCase()} size.${r.extra?` Showing ${r.shown} of ${r.shown+r.extra} books; pick a taller size or a slide per month to fit them all.`:''}${rs.length>1?` ${rs.length} images, swipe to see them all.`:''} You can also press and hold the image to save it.`;}
-async function phRefresh(){const rs=await renderPages(lastKind);const el=$('sprev');if(!el)return;if(!rs.length){el.innerHTML=`<div class="emptybox">No books match. Try 4★ and up or Everything.</div>`;lastImgs=[];lastImg=null;return;}lastImg=rs[0];lastImgs=rs;paintPrev();shareMsg(rs);}
+async function phRefresh(){const rs=await renderPages(lastKind);const el=$('sprev');if(!el)return;if(!rs.length){el.innerHTML=`<div class="emptybox">No books match. Try 4★ and up or Everything.</div>`;lastImgs=[];lastImg=null;return;}freeImgs(rs);lastImg=rs[0];lastImgs=rs;paintPrev();shareMsg(rs);}
 document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-act="lay"],[data-act="phf"],[data-act="phshuf"],[data-act="phclr"],[data-act="phtog"]');if(!t)return;const a=t.dataset.act;
   if(a==='lay'){ui.lay=t.dataset.v;saveUi();makeShare(lastKind);}
   else if(a==='phtog'){const b=phAll(lastKind).find(x=>String(x.id)===t.dataset.id);if(!b)return;const k=String(b.id);if(phOff.has(k))phOff.delete(k);else phOff.add(k);t.setAttribute('aria-pressed',phInc(b));const c=$('phcount');if(c)c.textContent=phCount(lastKind);clearTimeout(phTimer);phTimer=setTimeout(phRefresh,300);}
   else if(a==='phf'){phOff.clear();phOn.clear();ui.phf=t.dataset.v;saveUi();makeShare(lastKind);}
   else if(a==='phshuf'){phSeed=2+Math.floor(Math.random()*1e6);phRefresh();}
-  else if(a==='phclr'){phImg=null;makeShare(lastKind);}});
-document.addEventListener('change',e=>{if(e.target.id!=='phFile')return;const f=e.target.files&&e.target.files[0];if(!f)return;const u=URL.createObjectURL(f);const i=new Image();i.onload=()=>{phImg=i;makeShare(lastKind);};i.onerror=()=>{const m=$('smsg');if(m)m.textContent='That photo could not be opened. Try a JPEG or PNG.';};i.src=u;});
+  else if(a==='phclr'){if(phImg&&phImg.getContext){phImg.width=phImg.height=0;}phImg=null;makeShare(lastKind);}});
+document.addEventListener('change',e=>{if(e.target.id!=='phFile')return;const f=e.target.files&&e.target.files[0];if(!f)return;const u=URL.createObjectURL(f);const i=new Image();i.onload=()=>{const sc=Math.min(1,2160/Math.max(i.naturalWidth,i.naturalHeight));const c=document.createElement('canvas');c.width=Math.round(i.naturalWidth*sc);c.height=Math.round(i.naturalHeight*sc);const x=c.getContext('2d');x.imageSmoothingQuality='high';x.drawImage(i,0,0,c.width,c.height);URL.revokeObjectURL(u);if(phImg&&phImg.getContext){phImg.width=phImg.height=0;}phImg=c;makeShare(lastKind);};i.onerror=()=>{const m=$('smsg');if(m)m.textContent='That photo could not be opened. Try a JPEG or PNG.';};i.src=u;});
 document.addEventListener('input',e=>{if(e.target.id!=='phT')return;const v=e.target.value;phT=v===phAuto(lastKind)?null:v;clearTimeout(phTimer);phTimer=setTimeout(phRefresh,350);});
 async function makeShare(kind){
   kind=kind||(ui.lm?'month':'year');if(kind==='range')rangeInit();lastKind=kind;if(!SIZES[ui.size])ui.size='4x5';
@@ -1481,7 +1482,7 @@ async function makeShare(kind){
    <div class="share-prev" id="sprev"><div class="emptybox">Drawing your roundup…</div></div>
    <div class="actions"><button class="btn gold" data-act="saveimg">${navigator.canShare?'Share or save':'Save image'}</button></div><span class="hint" id="smsg"></span>`);
   const rs=await renderPages(kind);if(!$('sprev'))return;if(!rs.length){$('sprev').innerHTML='<div class="emptybox">No books match. Try 4\u2605 and up or Everything.</div>';lastImgs=[];lastImg=null;return;}
-  lastImg=rs[0];lastImgs=rs;paintPrev();shareMsg(rs);
+  freeImgs(rs);lastImg=rs[0];lastImgs=rs;paintPrev();shareMsg(rs);
 }
 async function saveImg(){
   const list=lastImgs&&lastImgs.length?lastImgs:(lastImg?[lastImg]:[]);if(!list.length)return;
