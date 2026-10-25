@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.12.0';
+const VERSION='1.12.1';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -1178,7 +1178,8 @@ const FONTS={
   serif:{name:'Serif',df:'Fraunces, Georgia, serif',bf:'Manrope, sans-serif'},
   elegant:{name:'Elegant',df:'"Playfair Display", Georgia, serif',bf:'"DM Sans", system-ui, sans-serif'},
   clean:{name:'Clean',df:'"DM Sans", system-ui, sans-serif',bf:'"DM Sans", system-ui, sans-serif'},
-  typewriter:{name:'Typewriter',df:'"Space Mono", ui-monospace, monospace',bf:'"Space Mono", ui-monospace, monospace'}
+  typewriter:{name:'Typewriter',df:'"Space Mono", ui-monospace, monospace',bf:'"Space Mono", ui-monospace, monospace'},
+  tiktok:{name:'TikTok',df:'"TikTok Sans", sans-serif',bf:'"TikTok Sans", sans-serif'}
 };
 let C=Object.assign({},THEMES.night,FONTS.modern);
 let lastImg=null,lastImgs=[],lastKind='month';
