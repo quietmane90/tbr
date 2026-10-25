@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.12.1';
+const VERSION='1.12.2';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -1381,8 +1381,13 @@ function paintPrev(){const el=$('sprev');if(!el||!lastImgs||!lastImgs.length)ret
   el.innerHTML=lastImgs.length===1?`<img alt="Roundup image" src="${cv(lastImgs[0]).toDataURL('image/png')}">`:`<div class="sprev-strip">${lastImgs.map((x,i)=>`<img alt="Roundup image ${i+1} of ${lastImgs.length}" src="${cv(x).toDataURL('image/png')}">`).join('')}</div>`;}
 document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-act="mock"]');if(!t)return;ui.mock=t.dataset.v==='1';saveUi();t.parentElement.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b===t));paintPrev();const h=$('mockhint');if(h)h.hidden=!ui.mock;});
 /* ---------- photo collage: your photo in the middle, covers framing the sides ---------- */
-let phImg=null,phSeed=1,phT=null,phTimer=null;
-function phList(kind){const RG=kind==='range'?rangeInfo():null;const full=RG?RG.list:period(ui.ly,kind==='month'?ui.lm:'');const f=ui.phf||'5';return f==='all'?full:full.filter(b=>b.r!==''&&+b.r>=(f==='4'?4:5));}
+let phImg=null,phSeed=1,phT=null,phTimer=null;const phOff=new Set(),phOn=new Set();
+function phAll(kind){const RG=kind==='range'?rangeInfo():null;return RG?RG.list:period(ui.ly,kind==='month'?ui.lm:'');}
+function phPass(b){const f=ui.phf||'5';return f==='all'||(b.r!==''&&+b.r>=(f==='4'?4:5));}
+function phInc(b){const k=String(b.id);return phOn.has(k)||(phPass(b)&&!phOff.has(k));}
+function phList(kind){return phAll(kind).filter(phInc);}
+function phCount(kind){const a=phAll(kind);return `${a.filter(phInc).length} of ${a.length} books in the collage. Tap a cover to take it out or put it back in.`;}
+function phPicks(kind){return `<div class="phpicks" role="group" aria-label="Books in the collage">${phAll(kind).map(b=>`<button data-act="phtog" data-id="${esc(String(b.id))}" aria-pressed="${phInc(b)}" aria-label="${esc(b.t)}">${cover(b,'','.3rem')}</button>`).join('')}</div><span class="hint" id="phcount">${phCount(kind)}</span>`;}
 function phWhen(kind){if(kind==='range')return 'from '+rangeInfo().head;if(kind==='month')return (ui.ly===THISYEAR&&MI(ui.lm)===NOW.getMonth())?'this month':'in '+FULL[MI(ui.lm)];return ui.ly===THISYEAR?'this year':'in '+ui.ly;}
 function phAuto(kind){const f=ui.phf||'5',w=phWhen(kind);return f==='all'?`Everything I read ${w}`:f==='4'?`Books I’ve rated 4★+ ${w}`:`Books I’ve rated 5★ ${w}`;}
 function phRand(seed){let a=seed>>>0;return()=>{a=(a+0x6D2B79F5)>>>0;let t=a;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296;};}
@@ -1445,16 +1450,17 @@ async function renderPhoto(kind,size){
 }
 function phControls(kind){
   return `<div class="field"><span class="lab">Photo</span><div class="phrow"><label class="btn ghost small phpick">${phImg?'Change photo':'Choose photo'}<input type="file" id="phFile" accept="image/*"></label>${phImg?'<button class="btn ghost small" data-act="phclr">Remove</button>':''}<button class="btn ghost small" data-act="phshuf">Shuffle covers</button></div><span class="hint">Your photo stays on this device. It isn't saved to the app.</span></div>
-   <div class="field"><span class="lab">Books</span><div class="seg">${[['5','5★ only'],['4','4★ and up'],['all','Everything']].map(([v,l])=>`<button data-act="phf" data-v="${v}" aria-pressed="${(ui.phf||'5')===v}">${l}</button>`).join('')}</div></div>
+   <div class="field"><span class="lab">Books</span><div class="seg">${[['5','5★ only'],['4','4★ and up'],['all','Everything']].map(([v,l])=>`<button data-act="phf" data-v="${v}" aria-pressed="${(ui.phf||'5')===v}">${l}</button>`).join('')}</div>${phPicks(kind)}</div>
    <div class="field"><span class="lab">Headline</span><input class="inp" id="phT" maxlength="80" autocomplete="off" value="${esc(phT??phAuto(kind))}" placeholder="No headline"><span class="hint">Edit it however you like. Clear it for no headline.</span></div>`;
 }
 function shareMsg(rs){const r=rs[0];const [w,hh,l]=SIZES[ui.size];const m=$('smsg');if(!m)return;
   if(r.photo){m.textContent=`${w} × ${hh} px, ${l} size. ${phImg?'':'Add a photo of yourself and the covers frame the middle. '}${r.extra?`Showing your top ${r.shown} of ${r.shown+r.extra} so the covers stay readable. `:''}Shuffle rearranges the covers.`;return;}
   m.textContent=`${w} × ${hh} px, Instagram ${l.toLowerCase()} size.${r.extra?` Showing ${r.shown} of ${r.shown+r.extra} books; pick a taller size or a slide per month to fit them all.`:''}${rs.length>1?` ${rs.length} images, swipe to see them all.`:''} You can also press and hold the image to save it.`;}
 async function phRefresh(){const rs=await renderPages(lastKind);const el=$('sprev');if(!el)return;if(!rs.length){el.innerHTML=`<div class="emptybox">No books match. Try 4★ and up or Everything.</div>`;lastImgs=[];lastImg=null;return;}lastImg=rs[0];lastImgs=rs;paintPrev();shareMsg(rs);}
-document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-act="lay"],[data-act="phf"],[data-act="phshuf"],[data-act="phclr"]');if(!t)return;const a=t.dataset.act;
+document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-act="lay"],[data-act="phf"],[data-act="phshuf"],[data-act="phclr"],[data-act="phtog"]');if(!t)return;const a=t.dataset.act;
   if(a==='lay'){ui.lay=t.dataset.v;saveUi();makeShare(lastKind);}
-  else if(a==='phf'){ui.phf=t.dataset.v;saveUi();makeShare(lastKind);}
+  else if(a==='phtog'){const b=phAll(lastKind).find(x=>String(x.id)===t.dataset.id);if(!b)return;const k=String(b.id);if(phInc(b)){if(phOn.has(k))phOn.delete(k);else phOff.add(k);}else{if(phOff.has(k))phOff.delete(k);else phOn.add(k);}t.setAttribute('aria-pressed',phInc(b));const c=$('phcount');if(c)c.textContent=phCount(lastKind);clearTimeout(phTimer);phTimer=setTimeout(phRefresh,300);}
+  else if(a==='phf'){phOff.clear();phOn.clear();ui.phf=t.dataset.v;saveUi();makeShare(lastKind);}
   else if(a==='phshuf'){phSeed=2+Math.floor(Math.random()*1e6);phRefresh();}
   else if(a==='phclr'){phImg=null;makeShare(lastKind);}});
 document.addEventListener('change',e=>{if(e.target.id!=='phFile')return;const f=e.target.files&&e.target.files[0];if(!f)return;const u=URL.createObjectURL(f);const i=new Image();i.onload=()=>{phImg=i;makeShare(lastKind);};i.onerror=()=>{const m=$('smsg');if(m)m.textContent='That photo could not be opened. Try a JPEG or PNG.';};i.src=u;});
