@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.13.1';
+const VERSION='1.13.2';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -1469,15 +1469,15 @@ async function renderPhoto(kind,size){
   const imgs=await Promise.all(list.map(b=>imgForCanvas(b)));
   const {k,gx,cw}=p,ch=cw*1.5,blockW=k*cw+(k-1)*gx;
   C.shadow=onPhoto?'rgba(0,0,0,.5)':C.shadow;
-  const sides=[[],[]];order.forEach((ix,i)=>sides[i%2].push(ix));
+  const VT=kind==='all';const sides=[[],[]];const half=Math.ceil(order.length/2);order.forEach((ix,i)=>sides[VT?(i<half?0:1):i%2].push(ix));
   sides.forEach((items,s)=>{
-    const cols=Array.from({length:k},()=>[]);items.forEach((ix,i)=>cols[i%k].push(ix));
+    const cols=Array.from({length:k},()=>[]);const per=Math.ceil(items.length/k);items.forEach((ix,i)=>cols[VT?Math.min(k-1,Math.floor(i/per)):i%k].push(ix));
     const maxR=Math.max(...cols.map(c=>c.length));const off=k>1?0.5:0;
     const span=maxR-1+off;let step=span>0?Math.min((avH-ch)/span,ch*1.32):0;
     const used=span*step+ch;const top=y0+Math.max(0,(avH-used)/2);
     cols.forEach((col,j)=>{
       /* outer column hugs the edge; columns alternate high and low, mirrored on the right */
-      const x0=s===0?L+j*(cw+gx):W-Rm-blockW+(k-1-j)*(cw+gx);
+      const x0=s===0?L+j*(cw+gx):W-Rm-blockW+(VT?j:k-1-j)*(cw+gx);
       const low=((j%2)===1)!==(s===1);
       col.forEach((ix,r)=>{
         let y=top+r*step+(k>1&&low?step*0.5:0);if(maxR===1&&k===1&&s===1)y+=ch*0.18;
