@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.11.2';
+const VERSION='1.12.0';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -46,7 +46,7 @@ async function askPersist(){try{if(navigator.storage&&navigator.storage.persist&
 const ui={tab:'home',ly:'',lm:undefined,st:'Unread',prio:'',q:'',open:{},size:'4x5',hideInstall:false};
 try{const s=JSON.parse(localStorage.getItem('tbr-ui')||'null');if(s)Object.assign(ui,s,{q:''});}catch(e){}
 const hsh=(location.hash||'').slice(1);if(['home','log','library'].includes(hsh))ui.tab=hsh;
-function saveUi(){try{localStorage.setItem('tbr-ui',JSON.stringify({tab:ui.tab,ly:ui.ly,lm:ui.lm,st:ui.st,prio:ui.prio,open:ui.open,size:ui.size,rg:ui.rg,split:ui.split,theme:ui.theme,font:ui.font,mock:ui.mock,sort:ui.sort,hideInstall:ui.hideInstall}))}catch(e){}}
+function saveUi(){try{localStorage.setItem('tbr-ui',JSON.stringify({tab:ui.tab,ly:ui.ly,lm:ui.lm,st:ui.st,prio:ui.prio,open:ui.open,size:ui.size,rg:ui.rg,split:ui.split,theme:ui.theme,font:ui.font,mock:ui.mock,lay:ui.lay,phf:ui.phf,sort:ui.sort,hideInstall:ui.hideInstall}))}catch(e){}}
 
 const byId=id=>books.find(b=>b.id===id);
 const nextId=()=>Math.max(0,...books.map(x=>x.id))+1;
@@ -1315,6 +1315,7 @@ function rangeControls(){
 document.addEventListener('change',e=>{const t=e.target;if(t.classList&&t.classList.contains('rg-sel')){ui.rg[t.dataset.f]=t.value;saveUi();makeShare('range');}});
 document.addEventListener('click',e=>{const t=e.target.closest('[data-act="rgq"]');if(t){rangeLast(+t.dataset.n);makeShare('range');}});
 async function renderPages(kind){
+  if(ui.lay==='photo'){const r=await renderPhoto(kind,ui.size);return r?[r]:[];}
   const y=ui.ly,m=kind==='month'?ui.lm:'';const split=kind==='month'?'one':(ui.split||'one');
   if(split==='one'){const r=await render(kind,y,m,ui.size);return r?[r]:[];}
   let months=[];
@@ -1378,23 +1379,102 @@ function mockup(src,size){
 function paintPrev(){const el=$('sprev');if(!el||!lastImgs||!lastImgs.length)return;const m=!!ui.mock,cv=x=>m?mockup(x.cv,ui.size):x.cv;
   el.innerHTML=lastImgs.length===1?`<img alt="Roundup image" src="${cv(lastImgs[0]).toDataURL('image/png')}">`:`<div class="sprev-strip">${lastImgs.map((x,i)=>`<img alt="Roundup image ${i+1} of ${lastImgs.length}" src="${cv(x).toDataURL('image/png')}">`).join('')}</div>`;}
 document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-act="mock"]');if(!t)return;ui.mock=t.dataset.v==='1';saveUi();t.parentElement.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b===t));paintPrev();const h=$('mockhint');if(h)h.hidden=!ui.mock;});
+/* ---------- photo collage: your photo in the middle, covers framing the sides ---------- */
+let phImg=null,phSeed=1,phT=null,phTimer=null;
+function phList(kind){const RG=kind==='range'?rangeInfo():null;const full=RG?RG.list:period(ui.ly,kind==='month'?ui.lm:'');const f=ui.phf||'5';return f==='all'?full:full.filter(b=>b.r!==''&&+b.r>=(f==='4'?4:5));}
+function phWhen(kind){if(kind==='range')return 'from '+rangeInfo().head;if(kind==='month')return (ui.ly===THISYEAR&&MI(ui.lm)===NOW.getMonth())?'this month':'in '+FULL[MI(ui.lm)];return ui.ly===THISYEAR?'this year':'in '+ui.ly;}
+function phAuto(kind){const f=ui.phf||'5',w=phWhen(kind);return f==='all'?`Everything I read ${w}`:f==='4'?`Books I’ve rated 4★+ ${w}`:`Books I’ve rated 5★ ${w}`;}
+function phRand(seed){let a=seed>>>0;return()=>{a=(a+0x6D2B79F5)>>>0;let t=a;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296;};}
+/* headline text with ★ drawn as a real star so it never depends on the font having the glyph */
+function phSegW(ctx,s,fs){const parts=s.split('★');let w=0;parts.forEach((p,i)=>{w+=ctx.measureText(p).width;if(i<parts.length-1)w+=fs*0.86;});return w;}
+function phLine(ctx,s,cx,base,fs,col,starCol){const parts=s.split('★');let x=cx-phSegW(ctx,s,fs)/2;parts.forEach((p,i)=>{ctx.fillStyle=col;ctx.fillText(p,x,base);x+=ctx.measureText(p).width;if(i<parts.length-1){const R=fs*0.4;starPath(ctx,x+fs*0.43,base-fs*0.36,R);ctx.fillStyle=starCol;ctx.fill();x+=fs*0.86;}});}
+async function renderPhoto(kind,size){
+  C=Object.assign({},THEMES[ui.theme]||THEMES.night,FONTS[ui.font]||FONTS.modern);
+  const all=phList(kind);if(!all.length)return null;
+  try{await document.fonts.load(`800 100px ${C.df}`);}catch(e){}
+  const [W,H]=SIZES[size]||SIZES['4x5'];const SZ=SAFE[size],square=size==='1x1';
+  const L=SZ?SZ.l:44,Rm=SZ?SZ.r:44,T=SZ?SZ.t:52,B=SZ?SZ.b:44;
+  const cv=document.createElement('canvas');cv.width=W;cv.height=H;const ctx=cv.getContext('2d');
+  /* background */
+  if(phImg){const s=Math.max(W/phImg.width,H/phImg.height),iw=phImg.width*s,ih=phImg.height*s;ctx.imageSmoothingQuality='high';ctx.drawImage(phImg,(W-iw)/2,(H-ih)/2,iw,ih);}
+  else{if(C.grad){const bg=ctx.createLinearGradient(0,0,0,H);bg.addColorStop(0,C.bg2);bg.addColorStop(1,C.bg);ctx.fillStyle=bg;}else ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);}
+  /* headline */
+  const text=(phT??phAuto(kind)).trim();let hb=T;
+  const onPhoto=!!phImg,ink=onPhoto?'#FFFFFF':C.ink,starCol=onPhoto?'#FFC53D':C.star;
+  if(text){
+    const maxW=W-L-Rm-(SZ?0:12);let fs=SZ?124:(square?100:112),ls;
+    for(;fs>48;fs-=2){ctx.font=`800 ${fs}px ${C.df}`;ls=wrap(ctx,text,maxW,9);if(ls.length<=2&&ls.every(l=>phSegW(ctx,l,fs)<=maxW))break;if(fs<=72&&ls.length<=3&&ls.every(l=>phSegW(ctx,l,fs)<=maxW))break;}
+    ctx.font=`800 ${fs}px ${C.df}`;ls=wrap(ctx,text,maxW,3);
+    const M=fm(ctx,ctx.font,'HdlbkI'),lh=fs*1.02;const blockB=T+M.a+(ls.length-1)*lh;
+    if(onPhoto){const g=ctx.createLinearGradient(0,0,0,blockB+fs*1.1);g.addColorStop(0,'rgba(0,0,0,.42)');g.addColorStop(0.65,'rgba(0,0,0,.16)');g.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=g;ctx.fillRect(0,0,W,blockB+fs*1.1);}
+    ctx.save();ctx.textAlign='left';ctx.textBaseline='alphabetic';ctx.font=`800 ${fs}px ${C.df}`;
+    if(onPhoto){ctx.shadowColor='rgba(0,0,0,.38)';ctx.shadowBlur=fs*0.16;ctx.shadowOffsetY=fs*0.03;}
+    const cx=L+(W-L-Rm)/2;ls.forEach((l,i)=>phLine(ctx,l,cx,T+M.a+i*lh,fs,ink,starCol));ctx.restore();
+    hb=blockB+Math.max(fm(ctx,`800 ${fs}px ${C.df}`,'gjpqy').d,0)+(square?26:36);
+  }
+  /* covers down both sides, the middle stays clear for you */
+  const y0=hb,y1=H-B,avH=y1-y0,Z=(W-L-Rm)*(square?0.3:0.31);
+  const fit=(n)=>{let best=null;const side=Math.ceil(n/2);for(let k=1;k<=4;k++){const gx=Z*0.07,rows=Math.ceil(side/k);const cwW=(Z-(k-1)*gx)/k;const cwH=avH/(1.5*(rows+(rows-1)*0.1+(k>1?0.55:0)));const cw=Math.min(cwW,cwH,W*0.27);if(!best||cw>best.cw+0.5)best={k,gx,rows,cw};}return best;};
+  let list=all,p=fit(list.length);
+  if(p.cw<80){const rk=all.map((b,i)=>[i,b.r===''?0:+b.r]).sort((a,b)=>b[1]-a[1]||a[0]-b[0]);let n=all.length;while(p.cw<80&&n>2){n-=2;p=fit(n);}const keep=new Set(rk.slice(0,n).map(x=>x[0]));list=all.filter((b,i)=>keep.has(i));}
+  const rnd=phRand(phSeed*7919+list.length);
+  const order=list.map((b,i)=>i);if(phSeed>1)for(let i=order.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[order[i],order[j]]=[order[j],order[i]];}
+  const imgs=await Promise.all(list.map(b=>b.c?loadImg(b.c):null));
+  const {k,gx,cw}=p,ch=cw*1.5,blockW=k*cw+(k-1)*gx;
+  C.shadow=onPhoto?'rgba(0,0,0,.5)':C.shadow;
+  const sides=[[],[]];order.forEach((ix,i)=>sides[i%2].push(ix));
+  sides.forEach((items,s)=>{
+    const cols=Array.from({length:k},()=>[]);items.forEach((ix,i)=>cols[i%k].push(ix));
+    const maxR=Math.max(...cols.map(c=>c.length));const off=k>1?0.5:0;
+    const span=maxR-1+off;let step=span>0?Math.min((avH-ch)/span,ch*1.32):0;
+    const used=span*step+ch;const top=y0+Math.max(0,(avH-used)/2);
+    cols.forEach((col,j)=>{
+      /* outer column hugs the edge; columns alternate high and low, mirrored on the right */
+      const x0=s===0?L+j*(cw+gx):W-Rm-blockW+(k-1-j)*(cw+gx);
+      const low=((j%2)===1)!==(s===1);
+      col.forEach((ix,r)=>{
+        let y=top+r*step+(k>1&&low?step*0.5:0);if(maxR===1&&k===1&&s===1)y+=ch*0.18;
+        const jx=(rnd()-0.5)*gx*0.9,jy=(rnd()-0.5)*ch*0.06;
+        const x=Math.max(L*0.5,Math.min(W-Rm*0.5-cw,x0+jx));y=Math.max(y0,Math.min(y1-ch,y+jy));
+        drawCover(ctx,list[ix],imgs[ix],x,y,cw,ch);});
+    });
+  });
+  const tag=kind==='range'?rangeInfo().tag:kind==='month'?`${ui.ly}-${String(MI(ui.lm)+1).padStart(2,'0')}`:ui.ly;
+  return {cv,name:`collage-${tag}-${size}.png`,H,shown:list.length,extra:all.length-list.length,photo:true};
+}
+function phControls(kind){
+  return `<div class="field"><span class="lab">Photo</span><div class="phrow"><label class="btn ghost small phpick">${phImg?'Change photo':'Choose photo'}<input type="file" id="phFile" accept="image/*"></label>${phImg?'<button class="btn ghost small" data-act="phclr">Remove</button>':''}<button class="btn ghost small" data-act="phshuf">Shuffle covers</button></div><span class="hint">Your photo stays on this device. It isn't saved to the app.</span></div>
+   <div class="field"><span class="lab">Books</span><div class="seg">${[['5','5★ only'],['4','4★ and up'],['all','Everything']].map(([v,l])=>`<button data-act="phf" data-v="${v}" aria-pressed="${(ui.phf||'5')===v}">${l}</button>`).join('')}</div></div>
+   <div class="field"><span class="lab">Headline</span><input class="inp" id="phT" maxlength="80" autocomplete="off" value="${esc(phT??phAuto(kind))}" placeholder="No headline"><span class="hint">Edit it however you like. Clear it for no headline.</span></div>`;
+}
+function shareMsg(rs){const r=rs[0];const [w,hh,l]=SIZES[ui.size];const m=$('smsg');if(!m)return;
+  if(r.photo){m.textContent=`${w} × ${hh} px, ${l} size. ${phImg?'':'Add a photo of yourself and the covers frame the middle. '}${r.extra?`Showing your top ${r.shown} of ${r.shown+r.extra} so the covers stay readable. `:''}Shuffle rearranges the covers.`;return;}
+  m.textContent=`${w} × ${hh} px, Instagram ${l.toLowerCase()} size.${r.extra?` Showing ${r.shown} of ${r.shown+r.extra} books; pick a taller size or a slide per month to fit them all.`:''}${rs.length>1?` ${rs.length} images, swipe to see them all.`:''} You can also press and hold the image to save it.`;}
+async function phRefresh(){const rs=await renderPages(lastKind);const el=$('sprev');if(!el)return;if(!rs.length){el.innerHTML=`<div class="emptybox">No books match. Try 4★ and up or Everything.</div>`;lastImgs=[];lastImg=null;return;}lastImg=rs[0];lastImgs=rs;paintPrev();shareMsg(rs);}
+document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-act="lay"],[data-act="phf"],[data-act="phshuf"],[data-act="phclr"]');if(!t)return;const a=t.dataset.act;
+  if(a==='lay'){ui.lay=t.dataset.v;saveUi();makeShare(lastKind);}
+  else if(a==='phf'){ui.phf=t.dataset.v;saveUi();makeShare(lastKind);}
+  else if(a==='phshuf'){phSeed=2+Math.floor(Math.random()*1e6);phRefresh();}
+  else if(a==='phclr'){phImg=null;makeShare(lastKind);}});
+document.addEventListener('change',e=>{if(e.target.id!=='phFile')return;const f=e.target.files&&e.target.files[0];if(!f)return;const u=URL.createObjectURL(f);const i=new Image();i.onload=()=>{phImg=i;makeShare(lastKind);};i.onerror=()=>{const m=$('smsg');if(m)m.textContent='That photo could not be opened. Try a JPEG or PNG.';};i.src=u;});
+document.addEventListener('input',e=>{if(e.target.id!=='phT')return;const v=e.target.value;phT=v===phAuto(lastKind)?null:v;clearTimeout(phTimer);phTimer=setTimeout(phRefresh,350);});
 async function makeShare(kind){
   kind=kind||(ui.lm?'month':'year');if(kind==='range')rangeInit();lastKind=kind;if(!SIZES[ui.size])ui.size='4x5';
   const sz=Object.entries(SIZES).map(([k,[w,hh,l,rt]])=>`<button data-act="size" data-s="${k}" aria-pressed="${ui.size===k}"><span class="shape" style="width:${Math.round(22*w/hh)}px;height:22px"></span><b>${rt||k.replace('x',':')}</b><span>${l}</span></button>`).join('');
   openSheet(`<div class="sh-head" style="grid-template-columns:1fr auto"><div style="display:grid;gap:4px"><span class="kicker">Share</span><h3>${kind==='range'?rangeInfo().head:kind==='month'?`${FULL[MI(ui.lm)]} ${ui.ly}`:ui.ly} roundup</h3></div>${X}</div>
    <div class="seg">${ui.lm?`<button data-act="kind" data-k="month" aria-pressed="${kind==='month'}">Month</button>`:''}<button data-act="kind" data-k="range" aria-pressed="${kind==='range'}">Pick months</button><button data-act="kind" data-k="year" aria-pressed="${kind==='year'}">Whole year</button></div>
+   <div class="seg"><button data-act="lay" data-v="grid" aria-pressed="${ui.lay!=='photo'}">Roundup</button><button data-act="lay" data-v="photo" aria-pressed="${ui.lay==='photo'}">Photo collage</button></div>
    ${kind==='range'?rangeControls():''}
+   ${ui.lay==='photo'?phControls(kind):''}
    <div class="sizes" role="group" aria-label="Image size">${sz}</div>
    <div class="field"><span class="lab">Colors</span><div class="themes">${Object.entries(THEMES).map(([k,t])=>`<button data-act="theme" data-v="${k}" aria-pressed="${(ui.theme||'night')===k}" aria-label="${t.name}"><span class="sw" style="background:${t.bg};border-color:${t.line}"><i style="background:${t.accent}"></i><em style="background:${t.ink}"></em></span><span class="tn">${t.name}</span></button>`).join('')}</div></div>
    <div class="field"><span class="lab">Font</span><div class="fonts">${Object.entries(FONTS).map(([k,f])=>`<button data-act="font" data-v="${k}" aria-pressed="${(ui.font||'modern')===k}"><b style="font-family:${f.df.replace(/"/g,"'")}">Aa</b><span>${f.name}</span></button>`).join('')}</div></div>
-   ${kind!=='month'?`<div class="field"><span class="lab">Slides</span><div class="seg">${[['one','One image'],['months','By month'],['overview','Recap + months']].map(([v,l])=>`<button data-act="split" data-v="${v}" aria-pressed="${(ui.split||'one')===v}">${l}</button>`).join('')}</div><span class="hint">Multiple slides post together as an Instagram carousel.</span></div>`:''}
+   ${kind!=='month'&&ui.lay!=='photo'?`<div class="field"><span class="lab">Slides</span><div class="seg">${[['one','One image'],['months','By month'],['overview','Recap + months']].map(([v,l])=>`<button data-act="split" data-v="${v}" aria-pressed="${(ui.split||'one')===v}">${l}</button>`).join('')}</div><span class="hint">Multiple slides post together as an Instagram carousel.</span></div>`:''}
    <div class="field"><span class="lab">Preview</span><div class="seg"><button data-act="mock" data-v="0" aria-pressed="${!ui.mock}">Clean</button><button data-act="mock" data-v="1" aria-pressed="${!!ui.mock}">In the app</button></div><span class="hint" id="mockhint" ${ui.mock?'':'hidden'}>A generic app layout over your image so you can see what gets covered. Save image always saves the clean version.</span></div>
    <div class="share-prev" id="sprev"><div class="emptybox">Drawing your roundup…</div></div>
    <div class="actions"><button class="btn gold" data-act="saveimg">${navigator.canShare?'Share or save':'Save image'}</button></div><span class="hint" id="smsg"></span>`);
-  const rs=await renderPages(kind);if(!rs.length||!$('sprev'))return;const r=rs[0];
-  lastImg=r;lastImgs=rs;paintPrev();
-  const [w,hh,l]=SIZES[ui.size];
-  $('smsg').textContent=`${w} × ${hh} px, Instagram ${l.toLowerCase()} size.${r.extra?` Showing ${r.shown} of ${r.shown+r.extra} books; pick a taller size or a slide per month to fit them all.`:''}${rs.length>1?` ${rs.length} images, swipe to see them all.`:''} You can also press and hold the image to save it.`;
+  const rs=await renderPages(kind);if(!$('sprev'))return;if(!rs.length){$('sprev').innerHTML='<div class="emptybox">No books match. Try 4\u2605 and up or Everything.</div>';lastImgs=[];lastImg=null;return;}
+  lastImg=rs[0];lastImgs=rs;paintPrev();shareMsg(rs);
 }
 async function saveImg(){
   const list=lastImgs&&lastImgs.length?lastImgs:(lastImg?[lastImg]:[]);if(!list.length)return;
