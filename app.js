@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.17.3';
+const VERSION='1.17.4';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -46,7 +46,7 @@ async function askPersist(){try{if(navigator.storage&&navigator.storage.persist&
 const ui={tab:'home',ly:'',lm:undefined,st:'Unread',prio:'',q:'',open:{},size:'4x5',hideInstall:false};
 try{const s=JSON.parse(localStorage.getItem('tbr-ui')||'null');if(s)Object.assign(ui,s,{q:''});}catch(e){}
 const hsh=(location.hash||'').slice(1);if(['home','log','library'].includes(hsh))ui.tab=hsh;
-function saveUi(){try{localStorage.setItem('tbr-ui',JSON.stringify({tab:ui.tab,ly:ui.ly,lm:ui.lm,st:ui.st,prio:ui.prio,open:ui.open,size:ui.size,rg:ui.rg,split:ui.split,theme:ui.theme,font:ui.font,mock:ui.mock,lay:ui.lay,phf:ui.phf,topN:ui.topN,fm:ui.fm,cdt:ui.cdt,cdc:ui.cdc,rct:ui.rct,genst:ui.genst,rcl1:ui.rcl1,rcl2:ui.rcl2,sort:ui.sort,hideInstall:ui.hideInstall}))}catch(e){}}
+function saveUi(){try{localStorage.setItem('tbr-ui',JSON.stringify({tab:ui.tab,ly:ui.ly,lm:ui.lm,st:ui.st,prio:ui.prio,open:ui.open,size:ui.size,rg:ui.rg,split:ui.split,theme:ui.theme,font:ui.font,mock:ui.mock,lay:ui.lay,phf:ui.phf,topN:ui.topN,fm:ui.fm,cdt:ui.cdt,cdc:ui.cdc,rct:ui.rct,genst:ui.genst,rcgap:ui.rcgap,rcl1:ui.rcl1,rcl2:ui.rcl2,sort:ui.sort,hideInstall:ui.hideInstall}))}catch(e){}}
 
 const byId=id=>books.find(b=>b.id===id);
 const nextId=()=>Math.max(0,...books.map(x=>x.id))+1;
@@ -1728,12 +1728,13 @@ function rcControls(){
   return `<div class="field"><span class="lab">Pairs</span>${P.length?`<div class="rclist">${P.map(([a,b,g,w],i)=>`<div class="rcrow"><span class="rcn">${i+1}</span>${cover(a,'','.3rem')}<span class="rct"><b>${esc(a.t)}</b><span>then ${esc(b.t)}</span>${g||w?`<span class="rcw">${esc([g,w].filter(Boolean).join(' \u00b7 '))}</span>`:''}</span>${cover(b,'','.3rem')}<span class="rcbtns"><button class="xbtn" data-act="rcup" data-i="${i}" aria-label="Move up" ${i?'':'disabled'}>↑</button><button class="xbtn" data-act="rcdel" data-i="${i}" aria-label="Remove pair">×</button></span></div>`).join('')}</div><button class="link" data-act="rcclr" style="justify-self:start">Clear all pairs</button>`:`<span class="hint">No pairs yet. Add one below${HAS_SMP()?' or let Claude suggest some':''}.</span>`}
    <datalist id="rc-dl">${R.map(b=>`<option value="${esc(rcLabel(b))}">`).join('')}</datalist>
    <div class="rcadd"><input class="inp" id="rc-a" list="rc-dl" placeholder="If you like…" autocomplete="off"><input class="inp" id="rc-b" list="rc-dl" placeholder="Read this…" autocomplete="off"><button class="btn gold small" data-act="rcadd">Add pair</button></div>
-   ${HAS_SMP()?`<button class="btn ghost small" data-act="rcsug" id="rc-sug" style="justify-self:start">Suggest pairs from my library</button>`:''}<span class="hint" id="rc-msg">Each pair is one slide. Post them together as a carousel.</span></div>
+   ${HAS_SMP()?`<div class="field" style="gap:6px"><span class="lab">How much better known "If you like" should be</span><div class="seg">${[['1','Any amount'],['1.5','1.5\u00d7'],['2','2\u00d7'],['3','3\u00d7']].map(([v,l])=>`<button data-act="rcgap" data-v="${v}" aria-pressed="${String(ui.rcgap||'1.5')===v}">${l}</button>`).join('')}</div><span class="hint">Measured by Goodreads ratings. 2\u00d7 means the first book has at least twice as many ratings.</span></div><button class="btn ghost small" data-act="rcsug" id="rc-sug" style="justify-self:start">Suggest pairs from my library</button>`:''}<span class="hint" id="rc-msg">Each pair is one slide. Post them together as a carousel.</span></div>
    <div class="field"><span class="lab">Background</span><div class="phrow"><label class="btn ghost small phpick">${phImg&&!phGen?'Change photo':'Use a photo'}<input type="file" id="phFile" accept="image/*"></label>${genControls()}${phImg?'<button class="btn ghost small" data-act="phclr">Remove</button>':''}</div>${genStyles()}<span class="hint">Use your photo or generate a bookshelf scene. Either one gets blurred. With neither, each slide uses a blur of its first cover.</span></div>
    <div class="field"><span class="lab">Text on slides</span><div class="seg"><button data-act="rct" data-v="on" aria-pressed="${ui.rct!=='off'}">On</button><button data-act="rct" data-v="off" aria-pressed="${ui.rct==='off'}">Off</button></div></div>
    ${ui.rct!=='off'?`<div class="row2"><div class="field"><span class="lab">Top line</span><input class="inp" id="rc-l1" maxlength="40" value="${esc(ui.rcl1??'If you like this:')}"></div><div class="field"><span class="lab">Middle line</span><input class="inp" id="rc-l2" maxlength="40" value="${esc(ui.rcl2??'Read this:')}"></div></div>`:''}`;
 }
 function rcFind(v){v=(v||'').trim().toLowerCase();if(!v)return null;const R=rcRead();return R.find(b=>rcLabel(b).toLowerCase()===v)||R.find(b=>b.t.toLowerCase()===v)||null;}
+const GAP=()=>+(ui.rcgap||1.5);
 async function rcSuggest(){
   if(!HAS_SMP()||rcBusy)return;rcBusy=true;const btn=$('rc-sug');if(btn){btn.disabled=true;btn.textContent='Matching genres…';}
   /* one entry per series (its first book you read) plus each standalone, with your average rating */
@@ -1755,7 +1756,7 @@ Step 2, make pairings that pass all of these:
 - same primary genre. Never cross genres: no LitRPG paired with epic fantasy, no science fiction paired with fantasy, no progression fantasy paired with grimdark epic.
 - same or closely neighboring subgenre.
 - at least two concrete shared plot or setting hooks, the kind a fan would recognize right away.
-- "like" is a big, widely known book and "read" is a lesser known one the post is putting people onto. When both counts are listed, "like" needs at least 3 times the ratings of "read". When a count is unknown, judge from what you know, and leave the pair out if you are not sure "like" is clearly more popular.
+- "like" is a big, widely known book and "read" is a lesser known one the post is putting people onto. When both counts are listed, "like" needs ${GAP()>1?`at least ${GAP()} times the ratings of`:'more ratings than'} "read". When a count is unknown, judge from what you know, and leave the pair out if you are not sure "like" is clearly more popular.
 - "read" is one the reader rated 4.5 or higher.
 - never two books from the same series or the same author. Each "read" book at most once. Skip these "read" ids, already used: ${[...usedRead].join(', ')||'none'}.
 Only return pairs a well-read fan of both books would agree with. Three great pairs beat eight weak ones, and zero is fine.
@@ -1765,19 +1766,20 @@ Return JSON only: {"pairs":[{"like":id,"read":id,"genre":"short genre and subgen
 ${lines}`;
   try{const o=await smp.json(prompt,{modelTier:'complex'});let n=0;D.recs=D.recs||[];
     for(const p of (o&&o.pairs)||[]){const a=byB.get(+p.like),b=byB.get(+p.read);if(!a||!b||a===b)continue;
-      if(a.b.a===b.b.a||(a.series&&a.series===b.series)||b.r<4.5)continue;if(pop(a)&&pop(b)&&pop(a)<pop(b)*2)continue;const k=a.b.id+'-'+b.b.id;if(have.has(k)||usedRead.has(b.b.id))continue;
+      if(a.b.a===b.b.a||(a.series&&a.series===b.series)||b.r<4.5)continue;if(pop(a)&&pop(b)&&pop(a)<pop(b)*GAP())continue;const k=a.b.id+'-'+b.b.id;if(have.has(k)||usedRead.has(b.b.id))continue;
       D.recs.push([a.b.id,b.b.id,String(p.genre||'').slice(0,40),String(p.why||'').slice(0,90)]);have.add(k);usedRead.add(b.b.id);n++;}
     if(n)mark();makeShare(lastKind).then(()=>{const m=$('rc-msg');if(m)m.textContent=n?`Added ${n} pair${n===1?'':'s'}, matched by genre and plot. Remove any you don't want.`:'No pairs passed the genre and plot match. Add your own below.';});
   }catch(e){const m=$('rc-msg');if(m)m.textContent='Claude could not suggest pairs right now. Add your own below.';const b2=$('rc-sug');if(b2){b2.disabled=false;b2.textContent='Suggest pairs from my library';}}
   finally{rcBusy=false;}
 }
-document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-act="rcadd"],[data-act="rcdel"],[data-act="rcup"],[data-act="rcsug"],[data-act="rct"],[data-act="rcclr"]');if(!t)return;const a=t.dataset.act;
+document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-act="rcadd"],[data-act="rcdel"],[data-act="rcup"],[data-act="rcsug"],[data-act="rct"],[data-act="rcclr"],[data-act="rcgap"]');if(!t)return;const a=t.dataset.act;
   if(a==='rcadd'){const x=rcFind($('rc-a').value),y=rcFind($('rc-b').value);const m=$('rc-msg');
     if(!x||!y){if(m)m.textContent='Pick both books from the list. Start typing a title.';return;}if(x.id===y.id){if(m)m.textContent='Pick two different books.';return;}
     D.recs=D.recs||[];D.recs.push([x.id,y.id]);mark();makeShare(lastKind);}
   else if(a==='rcdel'){D.recs.splice(+t.dataset.i,1);mark();makeShare(lastKind);}
   else if(a==='rcup'){const i=+t.dataset.i;if(i>0){[D.recs[i-1],D.recs[i]]=[D.recs[i],D.recs[i-1]];mark();makeShare(lastKind);}}
   else if(a==='rcsug')rcSuggest();
+  else if(a==='rcgap'){ui.rcgap=t.dataset.v;saveUi();t.parentElement.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===t));}
   else if(a==='rcclr'){if(!confirm('Remove all pairs?'))return;D.recs=[];mark();makeShare(lastKind);}
   else if(a==='rct'){ui.rct=t.dataset.v;saveUi();makeShare(lastKind);}});
 let rcTimer=null;document.addEventListener('input',e=>{const id=e.target.id;if(id!=='rc-l1'&&id!=='rc-l2')return;ui[id==='rc-l1'?'rcl1':'rcl2']=e.target.value;saveUi();clearTimeout(rcTimer);rcTimer=setTimeout(phRefresh,350);});
