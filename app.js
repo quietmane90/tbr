@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.17.4';
+const VERSION='1.17.5';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -1780,7 +1780,7 @@ document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest
   else if(a==='rcup'){const i=+t.dataset.i;if(i>0){[D.recs[i-1],D.recs[i]]=[D.recs[i],D.recs[i-1]];mark();makeShare(lastKind);}}
   else if(a==='rcsug')rcSuggest();
   else if(a==='rcgap'){ui.rcgap=t.dataset.v;saveUi();t.parentElement.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===t));}
-  else if(a==='rcclr'){if(!confirm('Remove all pairs?'))return;D.recs=[];mark();makeShare(lastKind);}
+  else if(a==='rcclr'){if(t.dataset.armed!=='1'){t.dataset.armed='1';t.textContent='Tap again to clear all pairs';clearTimeout(t._tm);t._tm=setTimeout(()=>{t.dataset.armed='';t.textContent='Clear all pairs';},3500);return;}D.recs=[];mark();makeShare(lastKind);}
   else if(a==='rct'){ui.rct=t.dataset.v;saveUi();makeShare(lastKind);}});
 let rcTimer=null;document.addEventListener('input',e=>{const id=e.target.id;if(id!=='rc-l1'&&id!=='rc-l2')return;ui[id==='rc-l1'?'rcl1':'rcl2']=e.target.value;saveUi();clearTimeout(rcTimer);rcTimer=setTimeout(phRefresh,350);});
 async function makeShare(kind){
