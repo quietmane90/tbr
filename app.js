@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.15.1';
+const VERSION='1.16.0';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -46,7 +46,7 @@ async function askPersist(){try{if(navigator.storage&&navigator.storage.persist&
 const ui={tab:'home',ly:'',lm:undefined,st:'Unread',prio:'',q:'',open:{},size:'4x5',hideInstall:false};
 try{const s=JSON.parse(localStorage.getItem('tbr-ui')||'null');if(s)Object.assign(ui,s,{q:''});}catch(e){}
 const hsh=(location.hash||'').slice(1);if(['home','log','library'].includes(hsh))ui.tab=hsh;
-function saveUi(){try{localStorage.setItem('tbr-ui',JSON.stringify({tab:ui.tab,ly:ui.ly,lm:ui.lm,st:ui.st,prio:ui.prio,open:ui.open,size:ui.size,rg:ui.rg,split:ui.split,theme:ui.theme,font:ui.font,mock:ui.mock,lay:ui.lay,phf:ui.phf,topN:ui.topN,fm:ui.fm,sort:ui.sort,hideInstall:ui.hideInstall}))}catch(e){}}
+function saveUi(){try{localStorage.setItem('tbr-ui',JSON.stringify({tab:ui.tab,ly:ui.ly,lm:ui.lm,st:ui.st,prio:ui.prio,open:ui.open,size:ui.size,rg:ui.rg,split:ui.split,theme:ui.theme,font:ui.font,mock:ui.mock,lay:ui.lay,phf:ui.phf,topN:ui.topN,fm:ui.fm,cdt:ui.cdt,cdc:ui.cdc,sort:ui.sort,hideInstall:ui.hideInstall}))}catch(e){}}
 
 const byId=id=>books.find(b=>b.id===id);
 const nextId=()=>Math.max(0,...books.map(x=>x.id))+1;
@@ -1518,11 +1518,12 @@ function shareMsg(rs){const r=rs[0];const [w,hh,l]=SIZES[ui.size];const m=$('sms
   if(r.photo){m.textContent=`${w} × ${hh} px, ${l} size. ${phImg?'':'Add a photo of yourself and the covers frame the middle. '}${r.extra?`Showing your top ${r.shown} of ${r.shown+r.extra} so the covers stay readable. `:''}Shuffle rearranges the covers.`;return;}
   m.textContent=`${w} × ${hh} px, ${l} size.${r.extra?` Showing ${r.shown} of ${r.shown+r.extra} books; pick a taller size or a slide per month to fit them all.`:''}${rs.length>1?` ${rs.length} images, swipe to see them all.`:''} You can also press and hold the image to save it.`;}
 async function phRefresh(){const rs=await renderPages(lastKind);const el=$('sprev');if(!el)return;if(!rs.length){el.innerHTML=`<div class="emptybox">No books match. Try 4★ and up or Everything.</div>`;lastImgs=[];lastImg=null;return;}freeImgs(rs);lastImg=rs[0];lastImgs=rs;paintPrev();shareMsg(rs);}
-document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-act="lay"],[data-act="phf"],[data-act="phshuf"],[data-act="phclr"],[data-act="phtog"],[data-act="topn"]');if(!t)return;const a=t.dataset.act;
+document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-act="lay"],[data-act="phf"],[data-act="phshuf"],[data-act="phclr"],[data-act="phtog"],[data-act="topn"],[data-act="cdt"],[data-act="cdc"]');if(!t)return;const a=t.dataset.act;
   if(a==='lay'){ui.lay=t.dataset.v;saveUi();makeShare(lastKind);}
   else if(a==='phtog'){const b=phAll(lastKind).find(x=>String(x.id)===t.dataset.id);if(!b)return;const k=String(b.id);if(phOff.has(k))phOff.delete(k);else phOff.add(k);t.setAttribute('aria-pressed',phInc(b));const c=$('phcount');if(c)c.textContent=phCount(lastKind);clearTimeout(phTimer);phTimer=setTimeout(phRefresh,300);}
   else if(a==='phf'){phOff.clear();phOn.clear();ui.phf=t.dataset.v;saveUi();makeShare(lastKind);}
   else if(a==='topn'){ui.topN=t.dataset.v==='all'?'all':+t.dataset.v;phOff.clear();saveUi();makeShare('all');}
+  else if(a==='cdt'||a==='cdc'){ui[a]=t.dataset.v;saveUi();makeShare(lastKind);}
   else if(a==='phshuf'){phSeed=2+Math.floor(Math.random()*1e6);phRefresh();}
   else if(a==='phclr'){if(phImg&&phImg.getContext){phImg.width=phImg.height=0;}phImg=null;makeShare(lastKind);}});
 document.addEventListener('change',e=>{if(e.target.id!=='phFile')return;const f=e.target.files&&e.target.files[0];if(!f)return;const u=URL.createObjectURL(f);const i=new Image();i.onload=()=>{const sc=Math.min(1,2160/Math.max(i.naturalWidth,i.naturalHeight));const c=document.createElement('canvas');c.width=Math.round(i.naturalWidth*sc);c.height=Math.round(i.naturalHeight*sc);const x=c.getContext('2d');x.imageSmoothingQuality='high';x.drawImage(i,0,0,c.width,c.height);URL.revokeObjectURL(u);if(phImg&&phImg.getContext){phImg.width=phImg.height=0;}phImg=c;makeShare(lastKind);};i.onerror=()=>{const m=$('smsg');if(m)m.textContent='That photo could not be opened. Try a JPEG or PNG.';};i.src=u;});
@@ -1537,7 +1538,22 @@ function cdBg(ctx,W,H,img){
   if(C.glow){const g=ctx.createRadialGradient(W*0.85,-80,10,W*0.85,-80,W*0.9);g.addColorStop(0,C.glow);g.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);}
 }
 function cdKicker(ctx,text,x,y,W){let fs=26;const trk=5;for(;fs>14;fs--){ctx.font=`800 ${fs}px ${C.bf}`;let w=0;for(const ch of text)w+=ctx.measureText(ch).width+trk;if(w<=W)break;}ctx.fillStyle=C.accent;ctx.textAlign='left';ctx.textBaseline='alphabetic';let cx=x;for(const ch of text){ctx.fillText(ch,cx,y);cx+=ctx.measureText(ch).width+trk;}return fs;}
-/* lo-fi countdown: your selfie on every slide, caption-style text, the cover held up like a sticker */
+/* the books that make up a series: numbered main books in order, or everything if none are numbered */
+function cdSeriesBooks(name){const all=(bySeries().get(name)||[]).slice().sort((a,b)=>(+a.n)-(+b.n));const main=all.filter(b=>Number.isInteger(+b.n)&&+b.n>0);return main.length?main:all;}
+const cdCount=n=>`${n} book${n===1?'':'s'}`;
+function cdSticker(ctx,b,img,cx,cy,w,h,rot){/* a cover with a white border, tilted a little */
+  ctx.save();ctx.translate(cx,cy);ctx.rotate(rot);const pad=Math.max(6,w*0.035);
+  ctx.shadowColor='rgba(0,0,0,.45)';ctx.shadowBlur=w*0.12;ctx.shadowOffsetY=w*0.04;ctx.fillStyle='#FFFFFF';rr(ctx,-w/2-pad,-h/2-pad,w+pad*2,h+pad*2,pad*0.9);ctx.fill();ctx.shadowColor='transparent';
+  const keep=C.shadow;C.shadow='rgba(0,0,0,0)';drawCover(ctx,b,img,-w/2,-h/2,w,h);C.shadow=keep;ctx.restore();}
+/* lay out one or more covers inside a box: biggest even grid that fits, last row centered */
+function cdGrid(ctx,items,box,sticker,seed,maxW){
+  const n=items.length;const gap=box.w*(sticker?0.06:0.035);let best=null;
+  for(let cols=1;cols<=n;cols++){const rows=Math.ceil(n/cols);const cw=Math.min((box.w-gap*(cols-1))/cols,((box.h-gap*(rows-1))/rows)/1.5,maxW);if(!best||cw>best.cw+0.5)best={cols,rows,cw};}
+  const {cols,rows,cw}=best,ch=cw*1.5,totH=rows*ch+(rows-1)*gap,y0=box.y+(box.h-totH)/2;const rnd=phRand(seed);
+  items.forEach((it,i)=>{const r=Math.floor(i/cols),c=i%cols;const inRow=Math.min(cols,n-r*cols);const rowW=inRow*cw+(inRow-1)*gap;const x=box.x+(box.w-rowW)/2+c*(cw+gap),y=y0+r*(ch+gap);
+    if(sticker)cdSticker(ctx,it.b,it.img,x+cw/2+(rnd()-0.5)*gap*0.5,y+ch/2+(rnd()-0.5)*gap*0.5,cw,ch,(rnd()-0.5)*0.13);else drawCover(ctx,it.b,it.img,x,y,cw,ch);});
+}
+/* lo-fi countdown: your selfie on every slide, caption-style text, covers held up like stickers */
 function lfPhoto(ctx,W,H){const s=Math.max(W/phImg.width,H/phImg.height),iw=phImg.width*s,ih=phImg.height*s;ctx.imageSmoothingQuality='high';ctx.drawImage(phImg,(W-iw)/2,(H-ih)/2,iw,ih);}
 function lfShade(ctx,W,y0,y1,a){const g=ctx.createLinearGradient(0,y0,0,y1);g.addColorStop(0,`rgba(0,0,0,${a})`);g.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=g;ctx.fillRect(0,Math.min(y0,y1),W,Math.abs(y1-y0));}
 function lfText(ctx,lines,cx,y,fs,wt,lh){/* white caption text with a soft dark edge so it reads on any photo */
@@ -1545,32 +1561,31 @@ function lfText(ctx,lines,cx,y,fs,wt,lh){/* white caption text with a soft dark 
   lines.forEach((l,i)=>{const yy=y+i*lh;ctx.shadowColor='rgba(0,0,0,.45)';ctx.shadowBlur=fs*0.18;ctx.shadowOffsetY=fs*0.03;ctx.strokeStyle='rgba(0,0,0,.28)';ctx.lineWidth=Math.max(2,fs*0.07);ctx.strokeText(l,cx,yy);ctx.shadowColor='transparent';ctx.fillStyle='#FFFFFF';ctx.fillText(l,cx,yy);});
   ctx.restore();}
 function lfFit(ctx,text,maxW,fs0,minFs,maxL,wt){let fs=fs0,ls;for(;fs>minFs;fs-=2){ctx.font=`${wt} ${fs}px ${C.df}`;ls=wrap(ctx,text,maxW,9);if(ls.length<=maxL&&String(text).split(/\s+/).every(w=>ctx.measureText(w).width<=maxW))break;}ctx.font=`${wt} ${fs}px ${C.df}`;return {fs,ls:wrap(ctx,text,maxW,maxL)};}
-async function renderLofi(size,list,imgs,N,S){
+function cdSub(b,S,withAuthor){const parts=[];if(withAuthor)parts.push(author(b.a));if(S)parts.push(cdCount(b.count));else if(withAuthor&&b.s!=='Standalone')parts.push(`${b.s} ${fmtN(b.n)}`);return parts.join('  ·  ');}
+async function renderLofi(size,list,sets,N,S,TXT){
   const [W,H]=SIZES[size]||SIZES['4x5'];const SZ=SAFE[size];
   const L=SZ?SZ.l:60,Rm=SZ?SZ.r:60,T=SZ?SZ.t:64,B=SZ?SZ.b:64,cw=W-L-Rm,cx=L+cw/2;const word=S?'series':'books';const out=[];
   /* intro */
   {const cv=document.createElement('canvas');cv.width=W;cv.height=H;const ctx=cv.getContext('2d');lfPhoto(ctx,W,H);
-    const t=lfFit(ctx,`my top ${N} ${word} of all time`,cw,SZ?132:112,56,3,800);const M=fm(ctx,`800 ${t.fs}px ${C.df}`,'Hdlbk0');const lh=t.fs*1.05;
-    const y0=T+M.a;lfShade(ctx,W,0,y0+t.ls.length*lh+80,0.45);lfText(ctx,t.ls,cx,y0,t.fs,800,lh);
-    const sf=SZ?44:38;lfShade(ctx,W,H,H-B-sf*3,0.35);lfText(ctx,['counting down →'],cx,H-B-sf*0.4,sf,700,sf);
+    if(TXT){const t=lfFit(ctx,`my top ${N} ${word} of all time`,cw,SZ?132:112,56,3,800);const M=fm(ctx,`800 ${t.fs}px ${C.df}`,'Hdlbk0');const lh=t.fs*1.05;
+      const y0=T+M.a;lfShade(ctx,W,0,y0+t.ls.length*lh+80,0.45);lfText(ctx,t.ls,cx,y0,t.fs,800,lh);
+      const sf=SZ?44:38;lfShade(ctx,W,H,H-B-sf*3,0.35);lfText(ctx,['counting down →'],cx,H-B-sf*0.4,sf,700,sf);}
     out.push({cv,name:`countdown-${word}-00-intro-${size}.png`,H});}
   for(let i=N-1;i>=0;i--){
-    const b=list[i],img=imgs[i],rank=i+1;const cv=document.createElement('canvas');cv.width=W;cv.height=H;const ctx=cv.getContext('2d');lfPhoto(ctx,W,H);
-    /* top caption: rank and name */
-    const nf=SZ?170:(size==='1x1'?120:150);const NM=fm(ctx,`800 ${nf}px ${C.df}`,'0123456789');
-    const t=lfFit(ctx,b.t,cw,SZ?84:(size==='1x1'?60:72),38,2,800);const TM=fm(ctx,`800 ${t.fs}px ${C.df}`,'Hdlbk');const tlh=t.fs*1.06;
-    const ny=T+NM.a,ty=ny+28+TM.a;const capB=ty+(t.ls.length-1)*tlh+t.fs*0.5;
-    lfShade(ctx,W,0,capB+90,0.5);lfText(ctx,[`${rank}.`],cx,ny,nf,800,nf);lfText(ctx,t.ls,cx,ty,t.fs,800,tlh);
-    /* bottom caption: rating and progress */
-    const sub=[b.r!==''?`${rateStr(b.r)}★${S?' avg':''}`:'',S?(b.read===b.total?`all ${b.total} read`:`${b.read} of ${b.total} read`):''].filter(Boolean).join('  ·  ')||author(b.a);
-    const sf=SZ?44:(size==='1x1'?32:38);lfShade(ctx,W,H,H-B-sf*3.2,0.45);
-    lfText(ctx,[sub.replace('★',' ★')],cx,H-B-sf*0.3,sf,700,sf);
-    /* the cover, tilted a little, like it's being held up to the camera */
-    const top=capB+60,bot=H-B-sf*1.6-40;let chh=Math.min(bot-top,(size==='1x1'?0.5:0.62)*H*0.62);let cwv=chh/1.5;if(cwv>cw*0.5){cwv=cw*0.5;chh=cwv*1.5;}
-    const ccx=W/2+(rank%2?1:-1)*cw*0.12,ccy=top+(bot-top)/2+chh*0.04,rot=(rank%2?1:-1)*0.055;
-    ctx.save();ctx.translate(ccx,ccy);ctx.rotate(rot);const pad=Math.max(8,cwv*0.035);
-    ctx.shadowColor='rgba(0,0,0,.45)';ctx.shadowBlur=cwv*0.12;ctx.shadowOffsetY=cwv*0.04;ctx.fillStyle='#FFFFFF';rr(ctx,-cwv/2-pad,-chh/2-pad,cwv+pad*2,chh+pad*2,pad*0.9);ctx.fill();ctx.shadowColor='transparent';
-    const keep=C.shadow;C.shadow='rgba(0,0,0,0)';drawCover(ctx,b,img,-cwv/2,-chh/2,cwv,chh);C.shadow=keep;ctx.restore();
+    const b=list[i],set=sets[i],rank=i+1;const cv=document.createElement('canvas');cv.width=W;cv.height=H;const ctx=cv.getContext('2d');lfPhoto(ctx,W,H);
+    let top=T+30,bot=H-B-30;
+    if(TXT){
+      const nf=SZ?170:(size==='1x1'?120:150);const NM=fm(ctx,`800 ${nf}px ${C.df}`,'0123456789');
+      const t=lfFit(ctx,b.t,cw,SZ?84:(size==='1x1'?60:72),38,2,800);const TM=fm(ctx,`800 ${t.fs}px ${C.df}`,'Hdlbk');const tlh=t.fs*1.06;
+      const ny=T+NM.a,ty=ny+28+TM.a;const capB=ty+(t.ls.length-1)*tlh+t.fs*0.5;
+      lfShade(ctx,W,0,capB+90,0.5);lfText(ctx,[`${rank}.`],cx,ny,nf,800,nf);lfText(ctx,t.ls,cx,ty,t.fs,800,tlh);
+      const sub=[b.r!==''?`${rateStr(b.r)} ★${S?' avg':''}`:'',cdSub(b,S,false)].filter(Boolean).join('  ·  ')||author(b.a);
+      const sf=SZ?44:(size==='1x1'?32:38);lfShade(ctx,W,H,H-B-sf*3.2,0.45);lfText(ctx,[sub],cx,H-B-sf*0.3,sf,700,sf);
+      top=capB+60;bot=H-B-sf*1.6-40;}
+    if(set.length>1){cdGrid(ctx,set,{x:L+10,y:top,w:cw-20,h:bot-top},true,rank*97+set.length,cw*0.42);}
+    else{/* one cover, tilted a little, like it's being held up to the camera */
+      let chh=Math.min(bot-top,(size==='1x1'?0.5:0.62)*H*(TXT?0.62:0.8));let cwv=chh/1.5;if(cwv>cw*(TXT?0.5:0.62)){cwv=cw*(TXT?0.5:0.62);chh=cwv*1.5;}
+      const ccx=W/2+(rank%2?1:-1)*cw*0.12,ccy=top+(bot-top)/2+chh*0.04;cdSticker(ctx,set[0].b,set[0].img,ccx,ccy,cwv,chh,(rank%2?1:-1)*0.055);}
     out.push({cv,name:`countdown-${word}-${String(N-i).padStart(2,'0')}-no${rank}-${size}.png`,H});
   }
   return out;
@@ -1579,52 +1594,55 @@ async function renderCountdown(size){
   C=Object.assign({},THEMES[ui.theme]||THEMES.night,FONTS[ui.font]||FONTS.modern);
   try{await Promise.all([`800 120px ${C.df}`,`700 32px ${C.bf}`,`800 30px ${C.bf}`].map(f=>document.fonts.load(f)));}catch(e){}
   const S=FM()==='s',all=favOrder(),N=Math.min(all.length,topN(),19);if(!N)return [];
+  const TXT=ui.cdt!=='off',ALLC=S&&ui.cdc==='all';
   const list=all.slice(0,N);const word=S?'series':'books';
+  if(S)for(const b of list)b.count=cdSeriesBooks(b.t).length;
   const [W,H]=SIZES[size]||SIZES['4x5'];const SZ=SAFE[size];
   const L=SZ?SZ.l:72,Rm=SZ?SZ.r:72,T=SZ?SZ.t:70,B=SZ?SZ.b:70,cw=W-L-Rm;
   const kick=`MY TOP ${N} ${S?'SERIES':'BOOKS'} OF ALL TIME`;const out=[];
-  const imgs=await Promise.all(list.map(b=>typeof imgForCanvas==='function'?imgForCanvas(b.cb||b):(b.c?loadImg(b.c):null)));
-  if(phImg)return renderLofi(size,list,imgs,N,S);
+  const load=b=>typeof imgForCanvas==='function'?imgForCanvas(b.cb||b):(b.c?loadImg(b.c):null);
+  const sets=await Promise.all(list.map(async b=>{const bs=ALLC?cdSeriesBooks(b.t):[b.cb||b];const im=await Promise.all(bs.map(load));return bs.map((x,k)=>({b:x,img:im[k]}));}));
+  if(phImg)return renderLofi(size,list,sets,N,S,TXT);
   /* intro slide */
   {const cv=document.createElement('canvas');cv.width=W;cv.height=H;const ctx=cv.getContext('2d');cdBg(ctx,W,H,null);
-    cdKicker(ctx,'COUNTDOWN',L,T+26,cw);
-    const title=`My top ${N} ${word} of all time`;let fs=SZ?150:(size==='1x1'?118:140),ls;
-    for(;fs>60;fs-=4){ctx.font=`800 ${fs}px ${C.df}`;ls=wrap(ctx,title,cw,4);if(ls.length<=4&&title.split(/\s+/).every(w=>ctx.measureText(w).width<=cw))break;}
-    ctx.font=`800 ${fs}px ${C.df}`;ls=wrap(ctx,title,cw,4);const M=fm(ctx,ctx.font,'HdlbkI0123');const lh=fs*1.02;
-    let y=T+26+48+M.a;ctx.fillStyle=C.ink;ls.forEach((l,i)=>ctx.fillText(l,L-3,y+i*lh));y+=(ls.length-1)*lh;
+    let y=T;
+    if(TXT){cdKicker(ctx,'COUNTDOWN',L,T+26,cw);
+      const title=`My top ${N} ${word} of all time`;let fs=SZ?150:(size==='1x1'?118:140),ls;
+      for(;fs>60;fs-=4){ctx.font=`800 ${fs}px ${C.df}`;ls=wrap(ctx,title,cw,4);if(ls.length<=4&&title.split(/\s+/).every(w=>ctx.measureText(w).width<=cw))break;}
+      ctx.font=`800 ${fs}px ${C.df}`;ls=wrap(ctx,title,cw,4);const M=fm(ctx,ctx.font,'HdlbkI0123');const lh=fs*1.02;
+      y=T+26+48+M.a;ctx.fillStyle=C.ink;ls.forEach((l,i)=>ctx.fillText(l,L-3,y+i*lh));y+=(ls.length-1)*lh;}
     /* three face-down cards */
-    const top=y+70,bot=H-B-90,avail=bot-top;const ch=Math.min(avail*0.86,(cw/2.45)*1.5),cwd=ch/1.5;const cx=W/2;
+    const top=y+(TXT?70:0),bot=H-B-(TXT?90:0),avail=bot-top;const ch=Math.min(avail*0.86,(cw/2.45)*1.5),cwd=ch/1.5;const cx=W/2;
     [[-0.13,-cwd*0.62],[0.13,cwd*0.62],[0,0]].forEach(([rot,dx],k)=>{ctx.save();ctx.translate(cx+dx,top+avail/2+(k<2?ch*0.04:0));ctx.rotate(rot);
       const x=-cwd/2,yy=-ch/2,rad=cwd*0.04;ctx.shadowColor=C.shadow;ctx.shadowBlur=cwd*0.14;ctx.shadowOffsetY=cwd*0.05;rr(ctx,x,yy,cwd,ch,rad);ctx.fillStyle=C.bg2;ctx.fill();ctx.shadowColor='transparent';
       ctx.strokeStyle=C.line;ctx.lineWidth=3;rr(ctx,x,yy,cwd,ch,rad);ctx.stroke();
       ctx.fillStyle=k===2?C.accent:C.faint;ctx.textAlign='center';ctx.textBaseline='middle';ctx.font=`800 ${Math.round(cwd*0.5)}px ${C.df}`;ctx.fillText('?',0,0);ctx.restore();});
-    ctx.fillStyle=C.muted;ctx.textAlign='center';ctx.textBaseline='alphabetic';ctx.font=`700 ${size==='1x1'?28:32}px ${C.bf}`;ctx.fillText('Swipe to count down  →',W/2,H-B-24);ctx.textAlign='left';
-    out.push({cv,name:`countdown-${S?'series':'books'}-00-intro-${size}.png`,H});}
+    if(TXT){ctx.fillStyle=C.muted;ctx.textAlign='center';ctx.textBaseline='alphabetic';ctx.font=`700 ${size==='1x1'?28:32}px ${C.bf}`;ctx.fillText('Swipe to count down  →',W/2,H-B-24);ctx.textAlign='left';}
+    out.push({cv,name:`countdown-${word}-00-intro-${size}.png`,H});}
   /* one slide per pick, from #N down to #1 */
   for(let i=N-1;i>=0;i--){
-    const b=list[i],img=imgs[i],rank=i+1;const cv=document.createElement('canvas');cv.width=W;cv.height=H;const ctx=cv.getContext('2d');cdBg(ctx,W,H,img);
-    cdKicker(ctx,kick,L,T+26,cw);
-    /* big rank */
-    const rf=SZ?230:(size==='1x1'?150:200);ctx.font=`800 ${rf}px ${C.df}`;const RM=fm(ctx,ctx.font,'0123456789');
-    const numY=T+26+30+RM.a;ctx.fillStyle=C.accent;ctx.textAlign='left';ctx.fillText(String(rank),L-6,numY);
-    const nw=ctx.measureText(String(rank)).width;ctx.font=`800 ${Math.round(rf*0.24)}px ${C.bf}`;ctx.fillStyle=C.muted;ctx.fillText(`OF ${N}`,L+nw+18,numY);
-    /* text block at the bottom, sized first so the cover gets what is left */
-    let tf=SZ?76:(size==='1x1'?54:66);let tls;for(;tf>34;tf-=2){ctx.font=`800 ${tf}px ${C.df}`;tls=wrap(ctx,b.t,cw,2);if(tls.length<=2&&String(b.t).split(/\s+/).every(w=>ctx.measureText(w).width<=cw))break;}
-    ctx.font=`800 ${tf}px ${C.df}`;tls=wrap(ctx,b.t,cw,2);const TMm=fm(ctx,ctx.font,'HdlbkI');const TDd=fm(ctx,ctx.font,'gjpqy').d;
-    const sub=S?`${author(b.a)}  ·  ${b.read===b.total?`all ${b.total} read`:`${b.read} of ${b.total} read`}`:(b.s==='Standalone'?author(b.a):`${author(b.a)}  ·  ${b.s} ${fmtN(b.n)}`);
-    const sf=SZ?32:(size==='1x1'?24:28);const st=SZ?40:(size==='1x1'?30:36);
-    const blockH=TMm.a+(tls.length-1)*tf*1.04+TDd+18+sf+22+(b.r!==''?st:0);
-    const textTop=H-B-blockH;
-    /* cover */
-    const cTop=numY+40,cBot=textTop-44;let chh=Math.max(120,cBot-cTop);let cwv=chh/1.5;if(cwv>cw*0.78){cwv=cw*0.78;chh=cwv*1.5;}
-    const cx=(W-cwv)/2,cy=cTop+Math.max(0,(cBot-cTop-chh)/2);drawCover(ctx,b,img,cx,cy,cwv,chh);
-    /* title, author, rating */
-    let y=textTop+TMm.a;ctx.fillStyle=C.ink;ctx.textAlign='center';ctx.font=`800 ${tf}px ${C.df}`;tls.forEach((l,k)=>ctx.fillText(l,W/2,y+k*tf*1.04));
-    y+=(tls.length-1)*tf*1.04+TDd+18+sf;ctx.font=`700 ${sf}px ${C.bf}`;ctx.fillStyle=C.muted;ctx.fillText(wrap(ctx,sub,cw,1)[0]||'',W/2,y);
-    if(b.r!==''){const rs=S?`${rateStr(b.r)} avg`:rateStr(b.r);ctx.font=`800 ${Math.round(st*0.82)}px ${C.bf}`;const tw=ctx.measureText(rs).width;const sw=5*st+4*st*0.16;const x0=(W-(sw+st*0.5+tw))/2;const ry=y+22;
-      drawStars(ctx,x0,ry,st,+b.r);ctx.fillStyle=C.star;ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(rs,x0+sw+st*0.5,ry+st/2+1);ctx.textBaseline='alphabetic';}
-    ctx.textAlign='left';
-    out.push({cv,name:`countdown-${S?'series':'books'}-${String(N-i).padStart(2,'0')}-no${rank}-${size}.png`,H});
+    const b=list[i],set=sets[i],rank=i+1;const cv=document.createElement('canvas');cv.width=W;cv.height=H;const ctx=cv.getContext('2d');cdBg(ctx,W,H,set[0].img);
+    let cTop=T+20,cBot=H-B-20,textTop=0,tf=0,tls=[],TMm=null,TDd=0,sf=0,st=0,sub='';
+    if(TXT){
+      cdKicker(ctx,kick,L,T+26,cw);
+      const rf=SZ?230:(size==='1x1'?150:200);ctx.font=`800 ${rf}px ${C.df}`;const RM=fm(ctx,ctx.font,'0123456789');
+      const numY=T+26+30+RM.a;ctx.fillStyle=C.accent;ctx.textAlign='left';ctx.fillText(String(rank),L-6,numY);
+      const nw=ctx.measureText(String(rank)).width;ctx.font=`800 ${Math.round(rf*0.24)}px ${C.bf}`;ctx.fillStyle=C.muted;ctx.fillText(`OF ${N}`,L+nw+18,numY);
+      tf=SZ?76:(size==='1x1'?54:66);for(;tf>34;tf-=2){ctx.font=`800 ${tf}px ${C.df}`;tls=wrap(ctx,b.t,cw,2);if(tls.length<=2&&String(b.t).split(/\s+/).every(w=>ctx.measureText(w).width<=cw))break;}
+      ctx.font=`800 ${tf}px ${C.df}`;tls=wrap(ctx,b.t,cw,2);TMm=fm(ctx,ctx.font,'HdlbkI');TDd=fm(ctx,ctx.font,'gjpqy').d;
+      sub=cdSub(b,S,true);sf=SZ?32:(size==='1x1'?24:28);st=SZ?40:(size==='1x1'?30:36);
+      const blockH=TMm.a+(tls.length-1)*tf*1.04+TDd+18+sf+22+(b.r!==''?st:0);
+      textTop=H-B-blockH;cTop=numY+40;cBot=textTop-44;}
+    if(set.length>1)cdGrid(ctx,set,{x:L,y:cTop,w:cw,h:cBot-cTop},false,rank*97,cw*0.46);
+    else{let chh=Math.max(120,cBot-cTop);let cwv=chh/1.5;if(cwv>cw*0.78){cwv=cw*0.78;chh=cwv*1.5;}
+      drawCover(ctx,set[0].b,set[0].img,(W-cwv)/2,cTop+Math.max(0,(cBot-cTop-chh)/2),cwv,chh);}
+    if(TXT){
+      let y=textTop+TMm.a;ctx.fillStyle=C.ink;ctx.textAlign='center';ctx.font=`800 ${tf}px ${C.df}`;tls.forEach((l,k)=>ctx.fillText(l,W/2,y+k*tf*1.04));
+      y+=(tls.length-1)*tf*1.04+TDd+18+sf;ctx.font=`700 ${sf}px ${C.bf}`;ctx.fillStyle=C.muted;ctx.fillText(wrap(ctx,sub,cw,1)[0]||'',W/2,y);
+      if(b.r!==''){const rs=S?`${rateStr(b.r)} avg`:rateStr(b.r);ctx.font=`800 ${Math.round(st*0.82)}px ${C.bf}`;const tw=ctx.measureText(rs).width;const sw=5*st+4*st*0.16;const x0=(W-(sw+st*0.5+tw))/2;const ry=y+22;
+        drawStars(ctx,x0,ry,st,+b.r);ctx.fillStyle=C.star;ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(rs,x0+sw+st*0.5,ry+st/2+1);ctx.textBaseline='alphabetic';}
+      ctx.textAlign='left';}
+    out.push({cv,name:`countdown-${word}-${String(N-i).padStart(2,'0')}-no${rank}-${size}.png`,H});
   }
   return out;
 }
@@ -1634,7 +1652,7 @@ async function makeShare(kind){
   openSheet(`<div class="sh-head" style="grid-template-columns:1fr auto"><div style="display:grid;gap:4px"><span class="kicker">Share</span><h3>${kind==='all'?(FM()==='s'?'All-time favorite series':'All-time favorites'):(kind==='range'?rangeInfo().head:kind==='month'?`${FULL[MI(ui.lm)]} ${ui.ly}`:ui.ly)+' roundup'}</h3></div>${X}</div>
    ${kind==='all'?`<div class="field"><span class="lab">How many</span><div class="seg">${[5,10,20,50,'all'].map(v=>`<button data-act="topn" data-v="${v}" aria-pressed="${String(ui.topN||10)===String(v)}">${v==='all'?'All':'Top '+v}</button>`).join('')}</div></div>`:''}
    <div class="seg" ${kind==='all'?'hidden':''}>${ui.lm?`<button data-act="kind" data-k="month" aria-pressed="${kind==='month'}">Month</button>`:''}<button data-act="kind" data-k="range" aria-pressed="${kind==='range'}">Pick months</button><button data-act="kind" data-k="year" aria-pressed="${kind==='year'}">Whole year</button></div>
-   <div class="seg"><button data-act="lay" data-v="grid" aria-pressed="${ui.lay!=='photo'&&!(ui.lay==='count'&&kind==='all')}">Roundup</button><button data-act="lay" data-v="photo" aria-pressed="${ui.lay==='photo'}">Photo collage</button>${kind==='all'?`<button data-act="lay" data-v="count" aria-pressed="${ui.lay==='count'}">Countdown</button>`:''}</div>${kind==='all'&&ui.lay==='count'?`<span class="hint">An intro slide, then one slide per pick from #${Math.min(topN(),19,favOrder().length)} down to #1. Post them together as a carousel.</span><div class="field"><span class="lab">Selfie</span><div class="phrow"><label class="btn ghost small phpick">${phImg?'Change photo':'Choose photo'}<input type="file" id="phFile" accept="image/*"></label>${phImg?'<button class="btn ghost small" data-act="phclr">Remove</button>':''}</div><span class="hint">Add a selfie for the lo-fi look: your photo on every slide with caption-style text. Leave it empty for the clean version.</span></div>`:''}
+   <div class="seg"><button data-act="lay" data-v="grid" aria-pressed="${ui.lay!=='photo'&&!(ui.lay==='count'&&kind==='all')}">Roundup</button><button data-act="lay" data-v="photo" aria-pressed="${ui.lay==='photo'}">Photo collage</button>${kind==='all'?`<button data-act="lay" data-v="count" aria-pressed="${ui.lay==='count'}">Countdown</button>`:''}</div>${kind==='all'&&ui.lay==='count'?`<span class="hint">An intro slide, then one slide per pick from #${Math.min(topN(),19,favOrder().length)} down to #1. Post them together as a carousel.</span><div class="field"><span class="lab">Selfie</span><div class="phrow"><label class="btn ghost small phpick">${phImg?'Change photo':'Choose photo'}<input type="file" id="phFile" accept="image/*"></label>${phImg?'<button class="btn ghost small" data-act="phclr">Remove</button>':''}</div><span class="hint">Add a selfie for the lo-fi look: your photo on every slide with caption-style text. Leave it empty for the clean version.</span></div><div class="field"><span class="lab">Text on slides</span><div class="seg"><button data-act="cdt" data-v="on" aria-pressed="${ui.cdt!=='off'}">On</button><button data-act="cdt" data-v="off" aria-pressed="${ui.cdt==='off'}">Off</button></div><span class="hint">Turn it off to add your own text in Instagram or TikTok.</span></div>${FM()==='s'?`<div class="field"><span class="lab">Covers</span><div class="seg"><button data-act="cdc" data-v="one" aria-pressed="${ui.cdc!=='all'}">First book</button><button data-act="cdc" data-v="all" aria-pressed="${ui.cdc==='all'}">Whole series</button></div></div>`:''}`:''}
    ${kind==='range'?rangeControls():''}
    ${ui.lay==='photo'?phControls(kind):''}
    <div class="sizes" role="group" aria-label="Image size">${sz}</div>
