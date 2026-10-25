@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.15.0';
+const VERSION='1.15.1';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -1537,6 +1537,44 @@ function cdBg(ctx,W,H,img){
   if(C.glow){const g=ctx.createRadialGradient(W*0.85,-80,10,W*0.85,-80,W*0.9);g.addColorStop(0,C.glow);g.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);}
 }
 function cdKicker(ctx,text,x,y,W){let fs=26;const trk=5;for(;fs>14;fs--){ctx.font=`800 ${fs}px ${C.bf}`;let w=0;for(const ch of text)w+=ctx.measureText(ch).width+trk;if(w<=W)break;}ctx.fillStyle=C.accent;ctx.textAlign='left';ctx.textBaseline='alphabetic';let cx=x;for(const ch of text){ctx.fillText(ch,cx,y);cx+=ctx.measureText(ch).width+trk;}return fs;}
+/* lo-fi countdown: your selfie on every slide, caption-style text, the cover held up like a sticker */
+function lfPhoto(ctx,W,H){const s=Math.max(W/phImg.width,H/phImg.height),iw=phImg.width*s,ih=phImg.height*s;ctx.imageSmoothingQuality='high';ctx.drawImage(phImg,(W-iw)/2,(H-ih)/2,iw,ih);}
+function lfShade(ctx,W,y0,y1,a){const g=ctx.createLinearGradient(0,y0,0,y1);g.addColorStop(0,`rgba(0,0,0,${a})`);g.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=g;ctx.fillRect(0,Math.min(y0,y1),W,Math.abs(y1-y0));}
+function lfText(ctx,lines,cx,y,fs,wt,lh){/* white caption text with a soft dark edge so it reads on any photo */
+  ctx.save();ctx.font=`${wt} ${fs}px ${C.df}`;ctx.textAlign='center';ctx.textBaseline='alphabetic';ctx.lineJoin='round';
+  lines.forEach((l,i)=>{const yy=y+i*lh;ctx.shadowColor='rgba(0,0,0,.45)';ctx.shadowBlur=fs*0.18;ctx.shadowOffsetY=fs*0.03;ctx.strokeStyle='rgba(0,0,0,.28)';ctx.lineWidth=Math.max(2,fs*0.07);ctx.strokeText(l,cx,yy);ctx.shadowColor='transparent';ctx.fillStyle='#FFFFFF';ctx.fillText(l,cx,yy);});
+  ctx.restore();}
+function lfFit(ctx,text,maxW,fs0,minFs,maxL,wt){let fs=fs0,ls;for(;fs>minFs;fs-=2){ctx.font=`${wt} ${fs}px ${C.df}`;ls=wrap(ctx,text,maxW,9);if(ls.length<=maxL&&String(text).split(/\s+/).every(w=>ctx.measureText(w).width<=maxW))break;}ctx.font=`${wt} ${fs}px ${C.df}`;return {fs,ls:wrap(ctx,text,maxW,maxL)};}
+async function renderLofi(size,list,imgs,N,S){
+  const [W,H]=SIZES[size]||SIZES['4x5'];const SZ=SAFE[size];
+  const L=SZ?SZ.l:60,Rm=SZ?SZ.r:60,T=SZ?SZ.t:64,B=SZ?SZ.b:64,cw=W-L-Rm,cx=L+cw/2;const word=S?'series':'books';const out=[];
+  /* intro */
+  {const cv=document.createElement('canvas');cv.width=W;cv.height=H;const ctx=cv.getContext('2d');lfPhoto(ctx,W,H);
+    const t=lfFit(ctx,`my top ${N} ${word} of all time`,cw,SZ?132:112,56,3,800);const M=fm(ctx,`800 ${t.fs}px ${C.df}`,'Hdlbk0');const lh=t.fs*1.05;
+    const y0=T+M.a;lfShade(ctx,W,0,y0+t.ls.length*lh+80,0.45);lfText(ctx,t.ls,cx,y0,t.fs,800,lh);
+    const sf=SZ?44:38;lfShade(ctx,W,H,H-B-sf*3,0.35);lfText(ctx,['counting down →'],cx,H-B-sf*0.4,sf,700,sf);
+    out.push({cv,name:`countdown-${word}-00-intro-${size}.png`,H});}
+  for(let i=N-1;i>=0;i--){
+    const b=list[i],img=imgs[i],rank=i+1;const cv=document.createElement('canvas');cv.width=W;cv.height=H;const ctx=cv.getContext('2d');lfPhoto(ctx,W,H);
+    /* top caption: rank and name */
+    const nf=SZ?170:(size==='1x1'?120:150);const NM=fm(ctx,`800 ${nf}px ${C.df}`,'0123456789');
+    const t=lfFit(ctx,b.t,cw,SZ?84:(size==='1x1'?60:72),38,2,800);const TM=fm(ctx,`800 ${t.fs}px ${C.df}`,'Hdlbk');const tlh=t.fs*1.06;
+    const ny=T+NM.a,ty=ny+28+TM.a;const capB=ty+(t.ls.length-1)*tlh+t.fs*0.5;
+    lfShade(ctx,W,0,capB+90,0.5);lfText(ctx,[`${rank}.`],cx,ny,nf,800,nf);lfText(ctx,t.ls,cx,ty,t.fs,800,tlh);
+    /* bottom caption: rating and progress */
+    const sub=[b.r!==''?`${rateStr(b.r)}★${S?' avg':''}`:'',S?(b.read===b.total?`all ${b.total} read`:`${b.read} of ${b.total} read`):''].filter(Boolean).join('  ·  ')||author(b.a);
+    const sf=SZ?44:(size==='1x1'?32:38);lfShade(ctx,W,H,H-B-sf*3.2,0.45);
+    lfText(ctx,[sub.replace('★',' ★')],cx,H-B-sf*0.3,sf,700,sf);
+    /* the cover, tilted a little, like it's being held up to the camera */
+    const top=capB+60,bot=H-B-sf*1.6-40;let chh=Math.min(bot-top,(size==='1x1'?0.5:0.62)*H*0.62);let cwv=chh/1.5;if(cwv>cw*0.5){cwv=cw*0.5;chh=cwv*1.5;}
+    const ccx=W/2+(rank%2?1:-1)*cw*0.12,ccy=top+(bot-top)/2+chh*0.04,rot=(rank%2?1:-1)*0.055;
+    ctx.save();ctx.translate(ccx,ccy);ctx.rotate(rot);const pad=Math.max(8,cwv*0.035);
+    ctx.shadowColor='rgba(0,0,0,.45)';ctx.shadowBlur=cwv*0.12;ctx.shadowOffsetY=cwv*0.04;ctx.fillStyle='#FFFFFF';rr(ctx,-cwv/2-pad,-chh/2-pad,cwv+pad*2,chh+pad*2,pad*0.9);ctx.fill();ctx.shadowColor='transparent';
+    const keep=C.shadow;C.shadow='rgba(0,0,0,0)';drawCover(ctx,b,img,-cwv/2,-chh/2,cwv,chh);C.shadow=keep;ctx.restore();
+    out.push({cv,name:`countdown-${word}-${String(N-i).padStart(2,'0')}-no${rank}-${size}.png`,H});
+  }
+  return out;
+}
 async function renderCountdown(size){
   C=Object.assign({},THEMES[ui.theme]||THEMES.night,FONTS[ui.font]||FONTS.modern);
   try{await Promise.all([`800 120px ${C.df}`,`700 32px ${C.bf}`,`800 30px ${C.bf}`].map(f=>document.fonts.load(f)));}catch(e){}
@@ -1546,6 +1584,7 @@ async function renderCountdown(size){
   const L=SZ?SZ.l:72,Rm=SZ?SZ.r:72,T=SZ?SZ.t:70,B=SZ?SZ.b:70,cw=W-L-Rm;
   const kick=`MY TOP ${N} ${S?'SERIES':'BOOKS'} OF ALL TIME`;const out=[];
   const imgs=await Promise.all(list.map(b=>typeof imgForCanvas==='function'?imgForCanvas(b.cb||b):(b.c?loadImg(b.c):null)));
+  if(phImg)return renderLofi(size,list,imgs,N,S);
   /* intro slide */
   {const cv=document.createElement('canvas');cv.width=W;cv.height=H;const ctx=cv.getContext('2d');cdBg(ctx,W,H,null);
     cdKicker(ctx,'COUNTDOWN',L,T+26,cw);
@@ -1595,7 +1634,7 @@ async function makeShare(kind){
   openSheet(`<div class="sh-head" style="grid-template-columns:1fr auto"><div style="display:grid;gap:4px"><span class="kicker">Share</span><h3>${kind==='all'?(FM()==='s'?'All-time favorite series':'All-time favorites'):(kind==='range'?rangeInfo().head:kind==='month'?`${FULL[MI(ui.lm)]} ${ui.ly}`:ui.ly)+' roundup'}</h3></div>${X}</div>
    ${kind==='all'?`<div class="field"><span class="lab">How many</span><div class="seg">${[5,10,20,50,'all'].map(v=>`<button data-act="topn" data-v="${v}" aria-pressed="${String(ui.topN||10)===String(v)}">${v==='all'?'All':'Top '+v}</button>`).join('')}</div></div>`:''}
    <div class="seg" ${kind==='all'?'hidden':''}>${ui.lm?`<button data-act="kind" data-k="month" aria-pressed="${kind==='month'}">Month</button>`:''}<button data-act="kind" data-k="range" aria-pressed="${kind==='range'}">Pick months</button><button data-act="kind" data-k="year" aria-pressed="${kind==='year'}">Whole year</button></div>
-   <div class="seg"><button data-act="lay" data-v="grid" aria-pressed="${ui.lay!=='photo'&&!(ui.lay==='count'&&kind==='all')}">Roundup</button><button data-act="lay" data-v="photo" aria-pressed="${ui.lay==='photo'}">Photo collage</button>${kind==='all'?`<button data-act="lay" data-v="count" aria-pressed="${ui.lay==='count'}">Countdown</button>`:''}</div>${kind==='all'&&ui.lay==='count'?`<span class="hint">An intro slide, then one slide per pick from #${Math.min(topN(),19,favOrder().length)} down to #1. Post them together as a carousel.</span>`:''}
+   <div class="seg"><button data-act="lay" data-v="grid" aria-pressed="${ui.lay!=='photo'&&!(ui.lay==='count'&&kind==='all')}">Roundup</button><button data-act="lay" data-v="photo" aria-pressed="${ui.lay==='photo'}">Photo collage</button>${kind==='all'?`<button data-act="lay" data-v="count" aria-pressed="${ui.lay==='count'}">Countdown</button>`:''}</div>${kind==='all'&&ui.lay==='count'?`<span class="hint">An intro slide, then one slide per pick from #${Math.min(topN(),19,favOrder().length)} down to #1. Post them together as a carousel.</span><div class="field"><span class="lab">Selfie</span><div class="phrow"><label class="btn ghost small phpick">${phImg?'Change photo':'Choose photo'}<input type="file" id="phFile" accept="image/*"></label>${phImg?'<button class="btn ghost small" data-act="phclr">Remove</button>':''}</div><span class="hint">Add a selfie for the lo-fi look: your photo on every slide with caption-style text. Leave it empty for the clean version.</span></div>`:''}
    ${kind==='range'?rangeControls():''}
    ${ui.lay==='photo'?phControls(kind):''}
    <div class="sizes" role="group" aria-label="Image size">${sz}</div>
