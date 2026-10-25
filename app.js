@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.12.4';
+const VERSION='1.13.0';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -154,12 +154,14 @@ function renderHomeStats(){
 
 /* ---------- log ---------- */
 function renderLog(){
+  if(ui.ly==='all'){renderFav();return;}
+  $('months').hidden=false;
   const years=[...new Set(readBooks().map(b=>b.y))].sort().reverse();
   if(!years.includes(ui.ly))ui.ly=years[0]||THISYEAR;
   const yb=period(ui.ly,'');
   if(ui.lm===undefined){const ms=yb.map(b=>MI(b.m)).filter(i=>i>=0);ui.lm=ms.length?MONTHS[Math.max(...ms)]:'';}
   if(ui.lm&&!yb.some(b=>b.m===ui.lm))ui.lm='';
-  $('years').innerHTML=years.map(y=>`<button class="pill" data-act="year" data-y="${y}" aria-pressed="${y===ui.ly}">${y}<span class="c">${period(y,'').length}</span></button>`).join('');
+  $('years').innerHTML=favPill()+years.map(y=>`<button class="pill" data-act="year" data-y="${y}" aria-pressed="${y===ui.ly}">${y}<span class="c">${period(y,'').length}</span></button>`).join('');
   $('months').innerHTML=`<button class="pill" data-act="lm" data-m="" aria-pressed="${!ui.lm}">Whole year</button>`+MONTHS.map(m=>{const n=yb.filter(b=>b.m===m).length;return `<button class="pill" data-act="lm" data-m="${m}" aria-pressed="${ui.lm===m}"${n?'':' disabled'}>${m}<span class="c">${n||''}</span></button>`;}).join('');
   const list=period(ui.ly,ui.lm);
   const label=ui.lm?`${FULL[MI(ui.lm)]} ${ui.ly}`:ui.ly;
@@ -210,6 +212,41 @@ function renderLib(){
   }
   $('libList').innerHTML=out.join('')||(books.length?`<div class="emptybox">Nothing matches. Try another filter.</div>`:`<div class="emptybox">Your library is empty. Tap Add a book, or import from Goodreads, StoryGraph or Libby from the menu.</div>`);
 }
+/* ---- all-time favorites: one ranked list of every book read ---- */
+function favOrder(){
+  const read=books.filter(b=>b.st==='Read');const byI=new Map(read.map(b=>[b.id,b]));
+  const ranked=(D.fav||[]).map(id=>byI.get(id)).filter(Boolean);const seen=new Set(ranked.map(b=>b.id));
+  const rv=b=>b.r===''?-1:+b.r;const when=b=>dKey(b)||'';
+  const rest=read.filter(b=>!seen.has(b.id)).sort((a,b)=>rv(b)-rv(a)||(when(b)<when(a)?-1:when(b)>when(a)?1:0)||a.t.localeCompare(b.t));
+  /* books not ranked yet slot in by rating, below every ranked book with the same or higher rating */
+  const out=ranked.slice();
+  for(const b of rest){let k=out.findIndex(x=>rv(x)<rv(b));if(k<0)k=out.length;out.splice(k,0,b);}
+  return out;
+}
+function favSet(list){D.fav=list.map(b=>b.id);}
+function favPill(){return `<button class="pill" data-act="year" data-y="all" aria-pressed="${ui.ly==='all'}">All time<span class="c">${books.filter(b=>b.st==='Read').length}</span></button>`;}
+function renderFav(){
+  const years=[...new Set(readBooks().map(b=>b.y))].sort().reverse();
+  $('years').innerHTML=favPill()+years.map(y=>`<button class="pill" data-act="year" data-y="${y}" aria-pressed="false">${y}<span class="c">${period(y,'').length}</span></button>`).join('');
+  $('months').innerHTML='';$('months').hidden=true;
+  const L=favOrder();const ranked=(D.fav||[]).length>0;
+  $('logsum').innerHTML=`<div style="display:grid;gap:2px"><span class="big">All-time favorites</span><span class="muted" style="font-size:.85rem">${L.length} books · ${avg(L).toFixed(1)} average · ${L.filter(b=>+b.r===5).length} five-star</span></div>`;
+  $('loggrid').innerHTML=L.length?`<p class="draghint" style="margin:0 0 12px">${ranked?'Hold and drag to rerank, or tap the number to move a book.':'Starts out by rating. Hold and drag to rerank, or tap the number to move a book.'} New reads slot in by their rating.</p><div class="series"><div class="blist" style="border-top:0">${L.map((b,i)=>{const yr=b.m&&b.y?`${b.m} ${b.y}`:(b.y||'');return `<button class="brow frow" data-act="book" data-id="${b.id}" data-drag="f" data-slot="${b.id}"><span class="fnum" data-act="favmove" data-id="${b.id}" role="button" aria-label="Move ${esc(b.t)}, now number ${i+1}">${i+1}</span>${cover(b,'','.3rem')}<span class="bt"><b>${esc(b.t)}</b><span>${b.s==='Standalone'?esc(author(b.a)):esc(b.s)+' '+fmtN(b.n)}</span>${yr?`<span class="dline">Read ${esc(yr)}</span>`:''}</span><span class="bright">${b.r!==''?stars(b.r,11):''}</span></button>`;}).join('')}</div></div>`:`<div class="emptybox">Finish a book and it shows up here.</div>`;
+}
+function favMoveTo(id,p){const L=favOrder();const i=L.findIndex(b=>b.id===id);if(i<0)return;const [b]=L.splice(i,1);p=Math.max(1,Math.min(L.length+1,Math.round(p)||1));L.splice(p-1,0,b);favSet(L);mark();renderLog();toast(`${b.t} is now #${p}`);}
+function favSheet(id){const L=favOrder();const i=L.findIndex(b=>b.id===id);if(i<0)return;const b=L[i],n=L.length,pos=i+1;
+  openSheet(`<div class="sh-head" style="grid-template-columns:1fr auto"><div style="display:grid;gap:4px"><span class="kicker">All-time rank</span><h3>${esc(b.t)}</h3></div>${X}</div>
+   <p class="hint" style="margin:0;font-size:.9rem">Now #${pos} of ${n}.</p>
+   <div class="field"><span class="lab">Move to</span><div class="favto"><input class="inp" id="favpos" type="number" inputmode="numeric" min="1" max="${n}" value="${pos}" aria-label="New rank"><button class="btn gold" data-act="favto" data-id="${id}">Move</button></div></div>
+   <div class="pills">${[['Top',1],['Up 5',pos-5],['Up 1',pos-1],['Down 1',pos+1],['Down 5',pos+5],['Bottom',n]].map(([l,p])=>`<button class="pill" data-act="favto" data-id="${id}" data-p="${Math.max(1,Math.min(n,p))}">${l}</button>`).join('')}</div>`);
+  setTimeout(()=>{const x=$('favpos');if(x){x.focus();x.select();}},60);}
+document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-act="favmove"],[data-act="favto"]');if(!t)return;e.preventDefault();e.stopPropagation();if(DR.skip)return;const id=+t.dataset.id;
+  if(t.dataset.act==='favmove'){favSheet(id);return;}
+  const p=t.dataset.p?+t.dataset.p:+(($('favpos')||{}).value||0);if(!p)return;closeSheet();favMoveTo(id,p);},true);
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.id==='favpos'){const btn=document.querySelector('[data-act="favto"]:not([data-p])');if(btn)btn.click();}});
+function favDrop(id,T){const L=favOrder();const i=L.findIndex(b=>b.id===id);if(i<0)return;const [b]=L.splice(i,1);let k=L.findIndex(x=>x.id===T.slot);if(k<0)k=L.length;if(T.after)k++;L.splice(k,0,b);favSet(L);mark();renderLog();toast(`${b.t} is now #${k+1}`);}
+/* scroll the page while dragging near the top or bottom edge */
+setInterval(()=>{if(!DR.on||DR.kind!=='f')return;const y=DR.y,h=window.innerHeight;let d=0;if(y<110)d=-Math.ceil((110-y)/6);else if(y>h-140)d=Math.ceil((y-(h-140))/6);if(d){window.scrollBy(0,d);DR.target=findGap('f',DR.x,DR.y);showBar(DR.target);}},30);
 function renderAll(){document.title=appTitle();$('brandName').textContent=appTitle();renderBanners();renderNow();renderRail();renderHomeStats();renderLog();renderLib();}
 
 /* ---------- sheets ---------- */
@@ -1043,8 +1080,8 @@ const DR={t:null,on:false,src:null,kind:'',ghost:null,target:null,x:0,y:0,sx:0,s
 function qInsert(key,to){const from=D.queue.indexOf(key);if(from>-1){D.queue.splice(from,1);if(from<to)to--;}D.queue.splice(Math.max(0,Math.min(to,D.queue.length)),0,key);}
 function dockRender(){const v=visQ();$('dockrow').innerHTML=v.length?v.map(i=>{const I=queueInfo(D.queue[i]);return `<div data-slot="${i}">${cover(I.shown,'','.3rem')}</div>`;}).join(''):`<div class="empty">Drop here to start your queue</div>`;}
 function slotsFor(kind){if(kind==='q')return [...$('rail').querySelectorAll('[data-slot]')];if(kind==='l')return [...$('loggrid').querySelectorAll('[data-slot]')];return [...$('dockrow').querySelectorAll('[data-slot]')];}
-function findGap(kind,x,y){const els=slotsFor(kind).filter(e=>e!==DR.src);if(!els.length)return null;let best=null,bd=1e9;for(const e of els){const r=e.getBoundingClientRect();const cx=r.left+r.width/2,cy=r.top+r.height/2;const d=Math.hypot((x-cx),(y-cy)*1.4);if(d<bd){bd=d;best={e,r,cx};}}return{slot:+best.e.dataset.slot,after:x>best.cx,r:best.r,el:best.e};}
-function showBar(g){const bar=$('dropbar');if(!g){bar.hidden=true;return;}const r=g.r;bar.hidden=false;bar.style.left=((g.after?r.right+5:r.left-7))+'px';bar.style.top=r.top+'px';bar.style.height=r.height+'px';}
+function findGap(kind,x,y){const els=slotsFor(kind==='f'?'l':kind).filter(e=>e!==DR.src);if(!els.length)return null;let best=null,bd=1e9;for(const e of els){const r=e.getBoundingClientRect();const cx=r.left+r.width/2,cy=r.top+r.height/2;const d=kind==='f'?Math.abs(y-cy):Math.hypot((x-cx),(y-cy)*1.4);if(d<bd){bd=d;best={e,r,cx,cy};}}return{slot:+best.e.dataset.slot,after:kind==='f'?y>best.cy:x>best.cx,r:best.r,el:best.e};}
+function showBar(g){const bar=$('dropbar');if(!g){bar.hidden=true;return;}const r=g.r;bar.hidden=false;if(DR.kind==='f'){bar.style.left=r.left+'px';bar.style.width=r.width+'px';bar.style.height='4px';bar.style.top=(g.after?r.bottom-2:r.top-2)+'px';return;}bar.style.width='';bar.style.left=((g.after?r.right+5:r.left-7))+'px';bar.style.top=r.top+'px';bar.style.height=r.height+'px';}
 function dragStart(){if(DR.on||!DR.src||!document.body.contains(DR.src)){DR.src=null;return;}dragCleanup();const el=DR.src;DR.on=true;document.body.classList.add('is-dragging');el.classList.add('dragging-src');try{navigator.vibrate&&navigator.vibrate(12)}catch(e){}const cv=el.querySelector('.cv');const g=document.createElement('div');g.className='dragghost';if(cv)g.appendChild(cv.cloneNode(true));document.body.appendChild(g);DR.ghost=g;if(DR.kind==='b'||DR.kind==='s'){dockRender();$('dock').hidden=false;}dragMove(DR.x,DR.y);}
 function dragMove(x,y){
   DR.x=x;DR.y=y;if(DR.ghost){DR.ghost.style.left=x+'px';DR.ghost.style.top=y+'px';}
@@ -1058,7 +1095,7 @@ function dragEnd(commit){
   if(was){
     document.body.classList.remove('is-dragging');DR.src&&DR.src.classList.remove('dragging-src');DR.ghost&&DR.ghost.remove();DR.ghost=null;$('dropbar').hidden=true;$('dock').hidden=true;$('dock').classList.remove('over');
     DR.skip=true;setTimeout(()=>DR.skip=false,400);const T=DR.target;
-    if(commit&&T){
+    if(commit&&T&&DR.kind==='f'){favDrop(+DR.src.dataset.slot,T);}else if(commit&&T){
       if(DR.kind==='q'){const from=+DR.src.dataset.slot;const key=D.queue[from];qInsert(key,T.slot+(T.after?1:0));mark();renderAll();}
       else if(DR.kind==='l'){const id=+DR.src.dataset.slot;const mv=byId(id);const tg=byId(T.slot);if(!ui.lm&&tg&&mv&&tg.m!==mv.m){toast(`That one is in ${FULL[MI(tg.m)]}. Change the finished date to move it there.`);}else{const list=period(ui.ly,ui.lm||mv.m);const rest=list.filter(b=>b.id!==id);let k=rest.findIndex(b=>b.id===T.slot);if(k<0)k=rest.length;if(T.after)k++;rest.splice(k,0,mv);rest.forEach((b,i)=>b.lo=i);mark();renderAll();toast('Order updated');}}
       else{let key;if(DR.kind==='s')key=DR.src.dataset.s;else key=qKey(byId(+DR.src.dataset.id));
