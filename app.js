@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.17.1';
+const VERSION='1.17.2';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -1690,7 +1690,7 @@ const HAS_SMP=()=>typeof smp!=='undefined'&&!!smp;
 let rcBusy=false;
 function rcRead(){return books.filter(b=>b.st==='Read').sort((a,b)=>a.t.localeCompare(b.t));}
 const rcLabel=b=>`${b.t} (${author(b.a)})`;
-function rcPairs(){return (D.recs||[]).map(p=>[byId(p[0]),byId(p[1])]).filter(p=>p[0]&&p[1]);}
+function rcPairs(){return (D.recs||[]).map(p=>[byId(p[0]),byId(p[1]),p[2]||'',p[3]||'']).filter(p=>p[0]&&p[1]);}
 function rcBlur(ctx,img,W,H){/* heavy blur that works everywhere: shrink in two steps, then stretch back */
   const s=Math.max(W/img.width,H/img.height);const a=document.createElement('canvas');a.width=Math.max(8,Math.round(W/6));a.height=Math.max(8,Math.round(H/6));
   const ax=a.getContext('2d');ax.imageSmoothingQuality='high';const iw=img.width*s/6,ih=img.height*s/6;ax.drawImage(img,(a.width-iw)/2,(a.height-ih)/2,iw,ih);
@@ -1725,7 +1725,7 @@ async function renderRecs(size){
 }
 function rcControls(){
   const P=rcPairs(),R=rcRead();
-  return `<div class="field"><span class="lab">Pairs</span>${P.length?`<div class="rclist">${P.map(([a,b],i)=>`<div class="rcrow"><span class="rcn">${i+1}</span>${cover(a,'','.3rem')}<span class="rct"><b>${esc(a.t)}</b><span>then ${esc(b.t)}</span></span>${cover(b,'','.3rem')}<span class="rcbtns"><button class="xbtn" data-act="rcup" data-i="${i}" aria-label="Move up" ${i?'':'disabled'}>↑</button><button class="xbtn" data-act="rcdel" data-i="${i}" aria-label="Remove pair">×</button></span></div>`).join('')}</div>`:`<span class="hint">No pairs yet. Add one below${HAS_SMP()?' or let Claude suggest some':''}.</span>`}
+  return `<div class="field"><span class="lab">Pairs</span>${P.length?`<div class="rclist">${P.map(([a,b,g,w],i)=>`<div class="rcrow"><span class="rcn">${i+1}</span>${cover(a,'','.3rem')}<span class="rct"><b>${esc(a.t)}</b><span>then ${esc(b.t)}</span>${g||w?`<span class="rcw">${esc([g,w].filter(Boolean).join(' \u00b7 '))}</span>`:''}</span>${cover(b,'','.3rem')}<span class="rcbtns"><button class="xbtn" data-act="rcup" data-i="${i}" aria-label="Move up" ${i?'':'disabled'}>↑</button><button class="xbtn" data-act="rcdel" data-i="${i}" aria-label="Remove pair">×</button></span></div>`).join('')}</div><button class="link" data-act="rcclr" style="justify-self:start">Clear all pairs</button>`:`<span class="hint">No pairs yet. Add one below${HAS_SMP()?' or let Claude suggest some':''}.</span>`}
    <datalist id="rc-dl">${R.map(b=>`<option value="${esc(rcLabel(b))}">`).join('')}</datalist>
    <div class="rcadd"><input class="inp" id="rc-a" list="rc-dl" placeholder="If you like…" autocomplete="off"><input class="inp" id="rc-b" list="rc-dl" placeholder="Read this…" autocomplete="off"><button class="btn gold small" data-act="rcadd">Add pair</button></div>
    ${HAS_SMP()?`<button class="btn ghost small" data-act="rcsug" id="rc-sug" style="justify-self:start">Suggest pairs from my library</button>`:''}<span class="hint" id="rc-msg">Each pair is one slide. Post them together as a carousel.</span></div>
@@ -1735,26 +1735,49 @@ function rcControls(){
 }
 function rcFind(v){v=(v||'').trim().toLowerCase();if(!v)return null;const R=rcRead();return R.find(b=>rcLabel(b).toLowerCase()===v)||R.find(b=>b.t.toLowerCase()===v)||null;}
 async function rcSuggest(){
-  if(!HAS_SMP()||rcBusy)return;rcBusy=true;const btn=$('rc-sug');if(btn){btn.disabled=true;btn.textContent='Thinking…';}
-  const R=books.filter(b=>b.st==='Read'&&b.r!=='');const have=new Set((D.recs||[]).map(p=>p.join('-')));
-  const lines=R.map(b=>`${b.id} | ${b.t} | ${author(b.a)} | ${b.s==='Standalone'?'standalone':b.s+' #'+fmtN(b.n)} | ${b.r}`).join('\n');
-  const prompt=`You make "If you like this, read this" book pairings for a reader's social post. Both books in each pair must come from the reader's list below (id | title | author | series | their rating).
-Pick up to 8 strong pairings: "like" is a popular, widely known book; "read" is a book the reader rated 4.5 or higher that fans of the "like" book would enjoy and may not know. Use the first book of a series unless a later book makes more sense. Never pair two books from the same series or the same author. Do not reuse a "read" book.
-Return JSON only: {"pairs":[{"like":id,"read":id}]}
+  if(!HAS_SMP()||rcBusy)return;rcBusy=true;const btn=$('rc-sug');if(btn){btn.disabled=true;btn.textContent='Matching genres…';}
+  /* one entry per series (its first book you read) plus each standalone, with your average rating */
+  const S=bySeries();const ents=[];
+  for(const [name,all] of S){const rd=all.filter(b=>b.st==='Read');if(!rd.length)continue;
+    if(name==='Standalone'){for(const b of rd)if(b.r!=='')ents.push({b,series:'',n:1,r:+b.r});continue;}
+    const main=rd.filter(b=>Number.isInteger(+b.n)&&+b.n>0).sort((x,y)=>(+x.n)-(+y.n));const first=(main[0]||rd.sort((x,y)=>(+x.n)-(+y.n))[0]);
+    const rt=rd.filter(b=>b.r!=='');if(!rt.length)continue;ents.push({b:first,series:name,n:rd.length,r:rt.reduce((s,b)=>s+(+b.r),0)/rt.length});}
+  const byB=new Map(ents.map(e=>[e.b.id,e]));const have=new Set((D.recs||[]).map(p=>p[0]+'-'+p[1]));const usedRead=new Set((D.recs||[]).map(p=>p[1]));
+  const lines=ents.map(e=>`${e.b.id} | ${e.b.t} | ${author(e.b.a)} | ${e.series?`${e.series} (read ${e.n})`:'standalone'} | ${e.r.toFixed(2)}`).join('\n');
+  const prompt=`You make "If you like this, read this" pairings for a book account's social post. Every book must come from the reader's list below (id | first book | author | series | their average rating). Use the ids exactly.
+
+Work in two steps.
+Step 1, for each entry, decide from what you know of the book:
+- primary genre: fantasy, science fiction, LitRPG/GameLit, progression fantasy (cultivation, leveling without a game system), horror, thriller, romantasy, and so on
+- subgenre: epic, grimdark, heroic, military, space opera, dungeon crawl, academy, cultivation, portal, urban, cozy, and so on
+- plot and setting hooks: Roman-inspired empire, caste or class hierarchy, rebellion, heist, magic school or trials, dragons, gods walking the earth, found family, revenge, war from both sides, and so on
+Step 2, make pairings that pass all of these:
+- same primary genre. Never cross genres: no LitRPG paired with epic fantasy, no science fiction paired with fantasy, no progression fantasy paired with grimdark epic.
+- same or closely neighboring subgenre.
+- at least two concrete shared plot or setting hooks, the kind a fan would recognize right away.
+- "like" is the better known book of the two. "read" is one the reader rated 4.5 or higher.
+- never two books from the same series or the same author. Each "read" book at most once. Skip these "read" ids, already used: ${[...usedRead].join(', ')||'none'}.
+Only return pairs a well-read fan of both books would agree with. Three great pairs beat eight weak ones, and zero is fine.
+
+Return JSON only: {"pairs":[{"like":id,"read":id,"genre":"short genre and subgenre","why":"under 12 words: the shared hooks"}]}
+
 ${lines}`;
-  try{const o=await smp.json(prompt,{modelTier:'default'});const ok=new Set(R.map(b=>b.id));let n=0;D.recs=D.recs||[];
-    for(const p of (o&&o.pairs)||[]){const a=+p.like,b=+p.read;if(ok.has(a)&&ok.has(b)&&a!==b&&!have.has(a+'-'+b)){D.recs.push([a,b]);have.add(a+'-'+b);n++;}}
-    if(n){mark();}makeShare(lastKind).then(()=>{const m=$('rc-msg');if(m)m.textContent=n?`Added ${n} pair${n===1?'':'s'}. Remove any you don't want.`:'Claude did not find new pairs. Add your own below.';});
-  }catch(e){const m=$('rc-msg');if(m)m.textContent='Claude could not suggest pairs right now. Add your own below.';}
+  try{const o=await smp.json(prompt,{modelTier:'complex'});let n=0;D.recs=D.recs||[];
+    for(const p of (o&&o.pairs)||[]){const a=byB.get(+p.like),b=byB.get(+p.read);if(!a||!b||a===b)continue;
+      if(a.b.a===b.b.a||(a.series&&a.series===b.series)||b.r<4.5)continue;const k=a.b.id+'-'+b.b.id;if(have.has(k)||usedRead.has(b.b.id))continue;
+      D.recs.push([a.b.id,b.b.id,String(p.genre||'').slice(0,40),String(p.why||'').slice(0,90)]);have.add(k);usedRead.add(b.b.id);n++;}
+    if(n)mark();makeShare(lastKind).then(()=>{const m=$('rc-msg');if(m)m.textContent=n?`Added ${n} pair${n===1?'':'s'}, matched by genre and plot. Remove any you don't want.`:'No pairs passed the genre and plot match. Add your own below.';});
+  }catch(e){const m=$('rc-msg');if(m)m.textContent='Claude could not suggest pairs right now. Add your own below.';const b2=$('rc-sug');if(b2){b2.disabled=false;b2.textContent='Suggest pairs from my library';}}
   finally{rcBusy=false;}
 }
-document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-act="rcadd"],[data-act="rcdel"],[data-act="rcup"],[data-act="rcsug"],[data-act="rct"]');if(!t)return;const a=t.dataset.act;
+document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-act="rcadd"],[data-act="rcdel"],[data-act="rcup"],[data-act="rcsug"],[data-act="rct"],[data-act="rcclr"]');if(!t)return;const a=t.dataset.act;
   if(a==='rcadd'){const x=rcFind($('rc-a').value),y=rcFind($('rc-b').value);const m=$('rc-msg');
     if(!x||!y){if(m)m.textContent='Pick both books from the list. Start typing a title.';return;}if(x.id===y.id){if(m)m.textContent='Pick two different books.';return;}
     D.recs=D.recs||[];D.recs.push([x.id,y.id]);mark();makeShare(lastKind);}
   else if(a==='rcdel'){D.recs.splice(+t.dataset.i,1);mark();makeShare(lastKind);}
   else if(a==='rcup'){const i=+t.dataset.i;if(i>0){[D.recs[i-1],D.recs[i]]=[D.recs[i],D.recs[i-1]];mark();makeShare(lastKind);}}
   else if(a==='rcsug')rcSuggest();
+  else if(a==='rcclr'){if(!confirm('Remove all pairs?'))return;D.recs=[];mark();makeShare(lastKind);}
   else if(a==='rct'){ui.rct=t.dataset.v;saveUi();makeShare(lastKind);}});
 let rcTimer=null;document.addEventListener('input',e=>{const id=e.target.id;if(id!=='rc-l1'&&id!=='rc-l2')return;ui[id==='rc-l1'?'rcl1':'rcl2']=e.target.value;saveUi();clearTimeout(rcTimer);rcTimer=setTimeout(phRefresh,350);});
 async function makeShare(kind){
