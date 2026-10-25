@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.13.2';
+const VERSION='1.14.0';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -57,7 +57,7 @@ const lastName=a=>String(a||'').split('&')[0].split(',')[0].trim();
 const appTitle=()=>{const n=(D.settings.name||'').trim();return n?`${n}${/s$/i.test(n)?"'":"'s"} TBR`:'My TBR';};
 const HUES=[['#3B5B92','#1E2F4F'],['#7A3E48','#3E1D24'],['#2F6B5E','#16362F'],['#6A4C93','#33234A'],['#8A5A2B','#45290F'],['#40535F','#1E2930'],['#7B2E2E','#3A1313'],['#2E5A76','#13293A']];
 function hue(s){let x=0;for(const c of String(s))x=(x*31+c.charCodeAt(0))>>>0;return HUES[x%HUES.length];}
-const srcFor=b=>b.c==='idb'?(coverURL.get(b.id)||''):(b.c||'');
+const srcFor=b=>{if(b&&b.cb)b=b.cb;return b.c==='idb'?(coverURL.get(b.id)||''):(b.c||'');};
 
 /* ---------- pieces ---------- */
 const STAR='M12 2.5l2.9 6.2 6.6.7-5 4.5 1.4 6.6L12 17.2l-5.9 3.3 1.4-6.6-5-4.5 6.6-.7z';
@@ -212,41 +212,60 @@ function renderLib(){
   }
   $('libList').innerHTML=out.join('')||(books.length?`<div class="emptybox">Nothing matches. Try another filter.</div>`:`<div class="emptybox">Your library is empty. Tap Add a book, or import from Goodreads, StoryGraph or Libby from the menu.</div>`);
 }
-/* ---- all-time favorites: one ranked list of every book read ---- */
-function favOrder(){
-  const read=books.filter(b=>b.st==='Read');const byI=new Map(read.map(b=>[b.id,b]));
-  const ranked=(D.fav||[]).map(id=>byI.get(id)).filter(Boolean);const seen=new Set(ranked.map(b=>b.id));
+/* ---- all-time favorites: ranked books, and ranked series ---- */
+const FM=()=>ui.fm==='s'?'s':'b';
+function seriesItems(){
+  const out=[];
+  for(const [name,all] of bySeries()){
+    if(name==='Standalone')continue;const rd=all.filter(b=>b.st==='Read');if(!rd.length)continue;
+    const rt=rd.filter(b=>b.r!=='');const av=rt.length?rt.reduce((s,b)=>s+(+b.r),0)/rt.length:'';
+    const main=all.filter(b=>Number.isInteger(+b.n)&&+b.n>0);const first=(main.length?main:all).find(b=>b.c)||all[0];
+    const last=rd.slice().sort((a,b)=>(dKey(b)||'').localeCompare(dKey(a)||''))[0];
+    out.push({id:'s:'+name,t:name,s:name,n:'',a:first.a,r:av===''?'':String(Math.round(av*100)/100),c:first.c,cb:first,m:last.m,y:last.y,df:last.df,read:rd.length,total:all.length,isS:true});
+  }
+  return out;
+}
+function favOrder(mode){
+  mode=mode||FM();
+  const items=mode==='s'?seriesItems():books.filter(b=>b.st==='Read');const byI=new Map(items.map(b=>[mode==='s'?b.t:b.id,b]));
+  const ranked=((mode==='s'?D.sfav:D.fav)||[]).map(k=>byI.get(k)).filter(Boolean);const seen=new Set(ranked);
   const rv=b=>b.r===''?-1:+b.r;const when=b=>dKey(b)||'';
-  const rest=read.filter(b=>!seen.has(b.id)).sort((a,b)=>rv(b)-rv(a)||(when(b)<when(a)?-1:when(b)>when(a)?1:0)||a.t.localeCompare(b.t));
-  /* books not ranked yet slot in by rating, below every ranked book with the same or higher rating */
+  const rest=items.filter(b=>!seen.has(b)).sort((a,b)=>rv(b)-rv(a)||((b.read||0)-(a.read||0))||(when(b)<when(a)?-1:when(b)>when(a)?1:0)||a.t.localeCompare(b.t));
+  /* anything not ranked yet slots in by rating, below every ranked entry with the same or higher rating */
   const out=ranked.slice();
   for(const b of rest){let k=out.findIndex(x=>rv(x)<rv(b));if(k<0)k=out.length;out.splice(k,0,b);}
   return out;
 }
 const topN=()=>{const n=ui.topN||10;return n==='all'?1e9:+n;};
 const topLabel=()=>(ui.topN||10)==='all'?'All time':`Top ${ui.topN||10}`;
-function favSet(list){D.fav=list.map(b=>b.id);}
+function favSet(list){if(FM()==='s')D.sfav=list.map(b=>b.t);else D.fav=list.map(b=>b.id);}
 function favPill(){return `<button class="pill" data-act="year" data-y="all" aria-pressed="${ui.ly==='all'}">All time<span class="c">${books.filter(b=>b.st==='Read').length}</span></button>`;}
 function renderFav(){
   const years=[...new Set(readBooks().map(b=>b.y))].sort().reverse();
   $('years').innerHTML=favPill()+years.map(y=>`<button class="pill" data-act="year" data-y="${y}" aria-pressed="false">${y}<span class="c">${period(y,'').length}</span></button>`).join('');
   $('months').innerHTML='';$('months').hidden=true;
-  const L=favOrder();const ranked=(D.fav||[]).length>0;
-  $('logsum').innerHTML=`<div style="display:grid;gap:2px"><span class="big">All-time favorites</span><span class="muted" style="font-size:.85rem">${L.length} books · ${avg(L).toFixed(1)} average · ${L.filter(b=>+b.r===5).length} five-star</span></div><button class="btn gold small" data-act="share" ${L.length?'':'disabled'}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13M7 8l5-5 5 5M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg>Share</button>`;
-  $('loggrid').innerHTML=L.length?`<p class="draghint" style="margin:0 0 12px">${ranked?'Hold and drag to rerank, or tap the number to move a book.':'Starts out by rating. Hold and drag to rerank, or tap the number to move a book.'} New reads slot in by their rating.</p><div class="series"><div class="blist" style="border-top:0">${L.map((b,i)=>{const yr=b.m&&b.y?`${b.m} ${b.y}`:(b.y||'');return `<button class="brow frow" data-act="book" data-id="${b.id}" data-drag="f" data-slot="${b.id}"><span class="fnum" data-act="favmove" data-id="${b.id}" role="button" aria-label="Move ${esc(b.t)}, now number ${i+1}">${i+1}</span>${cover(b,'','.3rem')}<span class="bt"><b>${esc(b.t)}</b><span>${b.s==='Standalone'?esc(author(b.a)):esc(b.s)+' '+fmtN(b.n)}</span>${yr?`<span class="dline">Read ${esc(yr)}</span>`:''}</span><span class="bright">${b.r!==''?stars(b.r,11):''}</span></button>`;}).join('')}</div></div>`:`<div class="emptybox">Finish a book and it shows up here.</div>`;
+  const S=FM()==='s',L=favOrder();const ranked=((S?D.sfav:D.fav)||[]).length>0;const word=S?'series':'books',one=S?'series':'book';
+  $('logsum').innerHTML=`<div style="display:grid;gap:2px"><span class="big">All-time favorites</span><span class="muted" style="font-size:.85rem">${L.length} ${word} · ${avg(L).toFixed(1)} average${S?'':` · ${L.filter(b=>+b.r===5).length} five-star`}</span></div><button class="btn gold small" data-act="share" ${L.length?'':'disabled'}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13M7 8l5-5 5 5M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg>Share</button>`;
+  const seg=`<div class="seg" style="margin-bottom:12px"><button data-act="fm" data-v="b" aria-pressed="${!S}">Books</button><button data-act="fm" data-v="s" aria-pressed="${S}">Series</button></div>`;
+  const row=(b,i)=>{
+    const sub=S?`${esc(author(b.a))} · ${b.read===b.total?`all ${b.total} read`:`${b.read} of ${b.total} read`}`:(b.s==='Standalone'?esc(author(b.a)):esc(b.s)+' '+fmtN(b.n));
+    const yr=S?'':(b.m&&b.y?`Read ${b.m} ${b.y}`:(b.y?`Read ${b.y}`:''));
+    return `<button class="brow frow" ${S?`data-act="favmove" data-i="${i}"`:`data-act="book" data-id="${b.id}"`} data-drag="f" data-slot="${i}"><span class="fnum" data-act="favmove" data-i="${i}" role="button" aria-label="Move ${esc(b.t)}, now number ${i+1}">${i+1}</span>${cover(b,'','.3rem')}<span class="bt"><b>${esc(b.t)}</b><span>${sub}</span>${yr?`<span class="dline">${esc(yr)}</span>`:''}</span><span class="bright">${b.r!==''?stars(b.r,11):''}${S&&b.r!==''?`<span class="fav-av">${rateStr(b.r)} avg</span>`:''}</span></button>`;};
+  $('loggrid').innerHTML=seg+(L.length?`<p class="draghint" style="margin:0 0 12px">${ranked?'':`Starts out by ${S?'average rating':'rating'}. `}Hold and drag to rerank, or tap the number to move ${S?'a series':'a book'}.${S?' Series show up once you finish a book in them.':' New reads slot in by their rating.'}</p><div class="series"><div class="blist" style="border-top:0">${L.map(row).join('')}</div></div>`:`<div class="emptybox">Finish a ${one} and it shows up here.</div>`);
 }
-function favMoveTo(id,p){const L=favOrder();const i=L.findIndex(b=>b.id===id);if(i<0)return;const [b]=L.splice(i,1);p=Math.max(1,Math.min(L.length+1,Math.round(p)||1));L.splice(p-1,0,b);favSet(L);mark();renderLog();toast(`${b.t} is now #${p}`);}
-function favSheet(id){const L=favOrder();const i=L.findIndex(b=>b.id===id);if(i<0)return;const b=L[i],n=L.length,pos=i+1;
-  openSheet(`<div class="sh-head" style="grid-template-columns:1fr auto"><div style="display:grid;gap:4px"><span class="kicker">All-time rank</span><h3>${esc(b.t)}</h3></div>${X}</div>
+function favMoveTo(i,p){const L=favOrder();if(!L[i])return;const [b]=L.splice(i,1);p=Math.max(1,Math.min(L.length+1,Math.round(p)||1));L.splice(p-1,0,b);favSet(L);mark();renderLog();toast(`${b.t} is now #${p}`);}
+function favSheet(i){const L=favOrder();const b=L[i];if(!b)return;const n=L.length,pos=i+1;
+  openSheet(`<div class="sh-head" style="grid-template-columns:1fr auto"><div style="display:grid;gap:4px"><span class="kicker">All-time ${b.isS?'series ':''}rank</span><h3>${esc(b.t)}</h3></div>${X}</div>
    <p class="hint" style="margin:0;font-size:.9rem">Now #${pos} of ${n}.</p>
-   <div class="field"><span class="lab">Move to</span><div class="favto"><input class="inp" id="favpos" type="number" inputmode="numeric" min="1" max="${n}" value="${pos}" aria-label="New rank"><button class="btn gold" data-act="favto" data-id="${id}">Move</button></div></div>
-   <div class="pills">${[['Top',1],['Up 5',pos-5],['Up 1',pos-1],['Down 1',pos+1],['Down 5',pos+5],['Bottom',n]].map(([l,p])=>`<button class="pill" data-act="favto" data-id="${id}" data-p="${Math.max(1,Math.min(n,p))}">${l}</button>`).join('')}</div>`);
+   <div class="field"><span class="lab">Move to</span><div class="favto"><input class="inp" id="favpos" type="number" inputmode="numeric" min="1" max="${n}" value="${pos}" aria-label="New rank"><button class="btn gold" data-act="favto" data-i="${i}">Move</button></div></div>
+   <div class="pills">${[['Top',1],['Up 5',pos-5],['Up 1',pos-1],['Down 1',pos+1],['Down 5',pos+5],['Bottom',n]].map(([l,p])=>`<button class="pill" data-act="favto" data-i="${i}" data-p="${Math.max(1,Math.min(n,p))}">${l}</button>`).join('')}</div>`);
   setTimeout(()=>{const x=$('favpos');if(x){x.focus();x.select();}},60);}
-document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-act="favmove"],[data-act="favto"]');if(!t)return;e.preventDefault();e.stopPropagation();if(DR.skip)return;const id=+t.dataset.id;
-  if(t.dataset.act==='favmove'){favSheet(id);return;}
-  const p=t.dataset.p?+t.dataset.p:+(($('favpos')||{}).value||0);if(!p)return;closeSheet();favMoveTo(id,p);},true);
+document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-act="favmove"],[data-act="favto"],[data-act="fm"]');if(!t)return;e.preventDefault();e.stopPropagation();if(DR.skip)return;
+  if(t.dataset.act==='fm'){ui.fm=t.dataset.v;saveUi();renderLog();return;}
+  const i=+t.dataset.i;if(t.dataset.act==='favmove'){favSheet(i);return;}
+  const p=t.dataset.p?+t.dataset.p:+(($('favpos')||{}).value||0);if(!p)return;closeSheet();favMoveTo(i,p);},true);
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.id==='favpos'){const btn=document.querySelector('[data-act="favto"]:not([data-p])');if(btn)btn.click();}});
-function favDrop(id,T){const L=favOrder();const i=L.findIndex(b=>b.id===id);if(i<0)return;const [b]=L.splice(i,1);let k=L.findIndex(x=>x.id===T.slot);if(k<0)k=L.length;if(T.after)k++;L.splice(k,0,b);favSet(L);mark();renderLog();toast(`${b.t} is now #${k+1}`);}
+function favDrop(from,T){const L=favOrder();if(!L[from])return;let to=T.slot+(T.after?1:0);if(from<to)to--;const [b]=L.splice(from,1);to=Math.max(0,Math.min(L.length,to));L.splice(to,0,b);favSet(L);mark();renderLog();toast(`${b.t} is now #${to+1}`);}
 /* scroll the page while dragging near the top or bottom edge */
 setInterval(()=>{if(!DR.on||DR.kind!=='f')return;const y=DR.y,h=window.innerHeight;let d=0;if(y<110)d=-Math.ceil((110-y)/6);else if(y>h-140)d=Math.ceil((y-(h-140))/6);if(d){window.scrollBy(0,d);DR.target=findGap('f',DR.x,DR.y);showBar(DR.target);}},30);
 function renderAll(){document.title=appTitle();$('brandName').textContent=appTitle();renderBanners();renderNow();renderRail();renderHomeStats();renderLog();renderLib();}
@@ -1231,7 +1250,7 @@ function wrapG(ctx,ws,maxW){ws=splitW(ctx,ws,maxW);const ls=[];let cur='';for(co
 function wrap(ctx,text,maxW,maxL){const ws=String(text).trim().split(/\s+/);let ls=wrapG(ctx,ws,maxW);if(ls.length>1&&ls.length<=maxL){const n=ls.length;let lo=Math.min(maxW,Math.max(...ws.map(w=>ctx.measureText(w).width))),hi=maxW;for(let k=0;k<14&&hi-lo>0.5;k++){const mid=(lo+hi)/2;if(wrapG(ctx,ws,mid).length<=n)hi=mid;else lo=mid;}ls=wrapG(ctx,ws,hi);}if(ls.length>maxL){ls.length=maxL;let l=ls[maxL-1];while(ctx.measureText(l+'…').width>maxW&&l.length>1)l=l.slice(0,-1);ls[maxL-1]=l.trimEnd()+'…';}return ls;}
 const IMGC=new Map();function loadImg(src,cors){const key=(cors?'1':'0')+src;if(IMGC.has(key))return IMGC.get(key);const pr=new Promise(res=>{const i=new Image();if(cors)i.crossOrigin='anonymous';i.referrerPolicy='no-referrer';i.onload=()=>{(i.decode?i.decode().catch(()=>{}):Promise.resolve()).then(()=>res(i.naturalWidth>1?i:null));};i.onerror=()=>res(null);i.src=src;});IMGC.set(key,pr);pr.then(v=>{if(!v)IMGC.delete(key);});return pr;}
 let noRemote=false;
-async function imgForCanvas(b){const s=srcFor(b);if(!s)return null;if(b.c==='idb')return loadImg(s,false);if(noRemote)return null;return loadImg(s,true);}
+async function imgForCanvas(b){if(b&&b.cb)b=b.cb;const s=srcFor(b);if(!s)return null;if(b.c==='idb')return loadImg(s,false);if(noRemote)return null;return loadImg(s,true);}
 function drawCover(ctx,b,img,x,y,w,h){
   const rad=Math.max(4,w*0.035);
   ctx.save();ctx.shadowColor=C.shadow;ctx.shadowBlur=w*0.18;ctx.shadowOffsetY=w*0.06;ctx.fillStyle='#000';rr(ctx,x,y,w,h,rad);ctx.fill();ctx.restore();
@@ -1276,7 +1295,7 @@ async function render(kind,y,m,size,pg){
   if(C.glow){const glow=ctx.createRadialGradient(W0*0.85,-80,10,W0*0.85,-80,W0*0.9);glow.addColorStop(0,C.glow);glow.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=glow;ctx.fillRect(0,0,W0,H);}
   ctx.textBaseline='alphabetic';ctx.textAlign='left';
   const yl=RG?RG.yl:(kind==='month'?y:'');
-  const kick=AT?'MY ALL-TIME FAVORITES':(RG?RG.kick:(kind==='month'?'MONTHLY ROUNDUP':'YEAR IN BOOKS'))+(yl?'  ·  '+yl:'');
+  const kick=AT?(FM()==='s'?'MY ALL-TIME FAVORITE SERIES':'MY ALL-TIME FAVORITES'):(RG?RG.kick:(kind==='month'?'MONTHLY ROUNDUP':'YEAR IN BOOKS'))+(yl?'  ·  '+yl:'');
   const ks=square?22:26;let kfs=ks;const pgw=0;const trk=ch=>ch===' '?1:5;for(;kfs>14;kfs--){ctx.font=`800 ${kfs}px ${C.bf}`;let tw=0;for(const chh of kick)tw+=ctx.measureText(chh).width+trk(chh);if(tw<=W-P*2-pgw)break;}ctx.fillStyle=C.accent;ctx.font=`800 ${kfs}px ${C.bf}`;let kx=P;for(const chh of kick){ctx.fillText(chh,kx,top+ks);kx+=ctx.measureText(chh).width+(chh===' '?1:5);}
   const title=AT?topLabel():RG?RG.title:(kind==='month'?FULL[MI(m)]:y);
   const compact=!!(pg&&pg.compact)||AT;
@@ -1321,7 +1340,7 @@ async function render(kind,y,m,size,pg){
     ctx.fillStyle=C.muted;ctx.font=`700 ${Math.round(p.cw*0.11)}px ${C.bf}`;ctx.fillText('more',x+p.cw/2,yy+ch/2+p.cw*0.24);ctx.textAlign='left';}
   ctx.textAlign='left';
   let url;try{url=cv.toDataURL('image/png');}catch(e){if(noRemote)return null;return render2(kind,y,m,size);}
-  return{cv,url,name:AT?`alltime-${topLabel().toLowerCase().replace(/ /g,'')}-${size}.png`:`roundup-${RG?RG.tag:kind==='month'?`${y}-${pad2(MI(m)+1)}`:y}-${size}${pg&&pg.total>1?'-'+pg.no:''}.png`,shown:shown.length,extra};
+  return{cv,url,name:AT?`alltime-${FM()==='s'?'series-':''}${topLabel().toLowerCase().replace(/ /g,'')}-${size}.png`:`roundup-${RG?RG.tag:kind==='month'?`${y}-${pad2(MI(m)+1)}`:y}-${size}${pg&&pg.total>1?'-'+pg.no:''}.png`,shown:shown.length,extra};
 }
 // If a cover from another site blocks drawing, redraw with only stored covers.
 async function render2(kind,y,m,size){noRemote=true;try{return await render(kind,y,m,size);}finally{noRemote=false;}}
@@ -1430,7 +1449,7 @@ function phList(kind){return phAll(kind).filter(phInc);}
 function phCount(kind){const a=phAll(kind).filter(phPass);return `${a.filter(phInc).length} of ${a.length} in the collage. Tap a cover to take it out or put it back in.`;}
 function phPicks(kind){return `<div class="phpicks" role="group" aria-label="Books in the collage">${phAll(kind).filter(phPass).map(b=>`<button data-act="phtog" data-id="${esc(String(b.id))}" aria-pressed="${phInc(b)}" aria-label="${esc(b.t)}">${cover(b,'','.3rem')}</button>`).join('')}</div><span class="hint" id="phcount">${phCount(kind)}</span>`;}
 function phWhen(kind){if(kind==='range')return 'from '+rangeInfo().head;if(kind==='month')return (ui.ly===THISYEAR&&MI(ui.lm)===NOW.getMonth())?'this month':'in '+FULL[MI(ui.lm)];return ui.ly===THISYEAR?'this year':'in '+ui.ly;}
-function phAuto(kind){if(kind==='all')return (ui.topN||10)==='all'?'My all-time favorite books':`My top ${ui.topN||10} books of all time`;const f=ui.phf||'5',w=phWhen(kind);return f==='all'?`Everything I read ${w}`:f==='4'?`Books I’ve rated 4★+ ${w}`:`Books I’ve rated 5★ ${w}`;}
+function phAuto(kind){if(kind==='all'){const w=FM()==='s'?'series':'books';return (ui.topN||10)==='all'?`My all-time favorite ${w}`:`My top ${ui.topN||10} ${w} of all time`;}const f=ui.phf||'5',w=phWhen(kind);return f==='all'?`Everything I read ${w}`:f==='4'?`Books I’ve rated 4★+ ${w}`:`Books I’ve rated 5★ ${w}`;}
 function phRand(seed){let a=seed>>>0;return()=>{a=(a+0x6D2B79F5)>>>0;let t=a;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296;};}
 /* headline text with ★ drawn as a real star so it never depends on the font having the glyph */
 function phSegW(ctx,s,fs){const parts=s.split('★');let w=0;parts.forEach((p,i)=>{w+=ctx.measureText(p).width;if(i<parts.length-1)w+=fs*0.86;});return w;}
@@ -1486,7 +1505,7 @@ async function renderPhoto(kind,size){
         drawCover(ctx,list[ix],imgs[ix],x,y,cw,ch);if(kind==='all')rankBadge(ctx,ix+1,x,y,cw);});
     });
   });
-  const tag=kind==='all'?'alltime-'+topLabel().toLowerCase().replace(/ /g,''):kind==='range'?rangeInfo().tag:kind==='month'?`${ui.ly}-${String(MI(ui.lm)+1).padStart(2,'0')}`:ui.ly;
+  const tag=kind==='all'?'alltime-'+(FM()==='s'?'series-':'')+topLabel().toLowerCase().replace(/ /g,''):kind==='range'?rangeInfo().tag:kind==='month'?`${ui.ly}-${String(MI(ui.lm)+1).padStart(2,'0')}`:ui.ly;
   return {cv,name:`collage-${tag}-${size}.png`,H,shown:list.length,extra:all.length-list.length,photo:true};
 }
 function phControls(kind){
@@ -1510,7 +1529,7 @@ document.addEventListener('input',e=>{if(e.target.id!=='phT')return;const v=e.ta
 async function makeShare(kind){
   kind=kind||(ui.ly==='all'?'all':ui.lm?'month':'year');if(kind==='range')rangeInit();lastKind=kind;if(!SIZES[ui.size])ui.size='4x5';
   const sz=Object.entries(SIZES).map(([k,[w,hh,l,rt]])=>`<button data-act="size" data-s="${k}" aria-pressed="${ui.size===k}"><span class="shape" style="width:${Math.round(22*w/hh)}px;height:22px"></span><b>${rt||k.replace('x',':')}</b><span>${l}</span></button>`).join('');
-  openSheet(`<div class="sh-head" style="grid-template-columns:1fr auto"><div style="display:grid;gap:4px"><span class="kicker">Share</span><h3>${kind==='all'?'All-time favorites':(kind==='range'?rangeInfo().head:kind==='month'?`${FULL[MI(ui.lm)]} ${ui.ly}`:ui.ly)+' roundup'}</h3></div>${X}</div>
+  openSheet(`<div class="sh-head" style="grid-template-columns:1fr auto"><div style="display:grid;gap:4px"><span class="kicker">Share</span><h3>${kind==='all'?(FM()==='s'?'All-time favorite series':'All-time favorites'):(kind==='range'?rangeInfo().head:kind==='month'?`${FULL[MI(ui.lm)]} ${ui.ly}`:ui.ly)+' roundup'}</h3></div>${X}</div>
    ${kind==='all'?`<div class="field"><span class="lab">How many</span><div class="seg">${[5,10,20,50,'all'].map(v=>`<button data-act="topn" data-v="${v}" aria-pressed="${String(ui.topN||10)===String(v)}">${v==='all'?'All':'Top '+v}</button>`).join('')}</div></div>`:''}
    <div class="seg" ${kind==='all'?'hidden':''}>${ui.lm?`<button data-act="kind" data-k="month" aria-pressed="${kind==='month'}">Month</button>`:''}<button data-act="kind" data-k="range" aria-pressed="${kind==='range'}">Pick months</button><button data-act="kind" data-k="year" aria-pressed="${kind==='year'}">Whole year</button></div>
    <div class="seg"><button data-act="lay" data-v="grid" aria-pressed="${ui.lay!=='photo'}">Roundup</button><button data-act="lay" data-v="photo" aria-pressed="${ui.lay==='photo'}">Photo collage</button></div>
