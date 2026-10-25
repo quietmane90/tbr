@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.17.6';
+const VERSION='1.17.7';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -1540,7 +1540,7 @@ function cdBg(ctx,W,H,img){
 }
 function cdKicker(ctx,text,x,y,W){let fs=26;const trk=5;for(;fs>14;fs--){ctx.font=`800 ${fs}px ${C.bf}`;let w=0;for(const ch of text)w+=ctx.measureText(ch).width+trk;if(w<=W)break;}ctx.fillStyle=C.accent;ctx.textAlign='left';ctx.textBaseline='alphabetic';let cx=x;for(const ch of text){ctx.fillText(ch,cx,y);cx+=ctx.measureText(ch).width+trk;}return fs;}
 /* the books that make up a series: numbered main books in order, or everything if none are numbered */
-function cdSeriesBooks(name){const all=(bySeries().get(name)||[]).slice().sort((a,b)=>(+a.n)-(+b.n));const main=all.filter(b=>Number.isInteger(+b.n)&&+b.n>0);return main.length?main:all;}
+function cdSeriesBooks(name){const all=(bySeries().get(name)||[]).filter(b=>b.av!=='No'||b.st==='Read').sort((a,b)=>(+a.n)-(+b.n));const main=all.filter(b=>Number.isInteger(+b.n)&&+b.n>0);return main.length?main:all;}
 const cdCount=n=>`${n} book${n===1?'':'s'}`;
 function cdSticker(ctx,b,img,cx,cy,w,h,rot){/* a cover tilted a little, lifted off the photo with a soft shadow */
   ctx.save();ctx.translate(cx,cy);ctx.rotate(rot);const keep=C.shadow;C.shadow='rgba(0,0,0,.38)';drawCover(ctx,b,img,-w/2,-h/2,w,h);C.shadow=keep;ctx.restore();}
