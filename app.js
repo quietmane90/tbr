@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.16.0';
+const VERSION='1.17.0';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -46,7 +46,7 @@ async function askPersist(){try{if(navigator.storage&&navigator.storage.persist&
 const ui={tab:'home',ly:'',lm:undefined,st:'Unread',prio:'',q:'',open:{},size:'4x5',hideInstall:false};
 try{const s=JSON.parse(localStorage.getItem('tbr-ui')||'null');if(s)Object.assign(ui,s,{q:''});}catch(e){}
 const hsh=(location.hash||'').slice(1);if(['home','log','library'].includes(hsh))ui.tab=hsh;
-function saveUi(){try{localStorage.setItem('tbr-ui',JSON.stringify({tab:ui.tab,ly:ui.ly,lm:ui.lm,st:ui.st,prio:ui.prio,open:ui.open,size:ui.size,rg:ui.rg,split:ui.split,theme:ui.theme,font:ui.font,mock:ui.mock,lay:ui.lay,phf:ui.phf,topN:ui.topN,fm:ui.fm,cdt:ui.cdt,cdc:ui.cdc,sort:ui.sort,hideInstall:ui.hideInstall}))}catch(e){}}
+function saveUi(){try{localStorage.setItem('tbr-ui',JSON.stringify({tab:ui.tab,ly:ui.ly,lm:ui.lm,st:ui.st,prio:ui.prio,open:ui.open,size:ui.size,rg:ui.rg,split:ui.split,theme:ui.theme,font:ui.font,mock:ui.mock,lay:ui.lay,phf:ui.phf,topN:ui.topN,fm:ui.fm,cdt:ui.cdt,cdc:ui.cdc,rct:ui.rct,rcl1:ui.rcl1,rcl2:ui.rcl2,sort:ui.sort,hideInstall:ui.hideInstall}))}catch(e){}}
 
 const byId=id=>books.find(b=>b.id===id);
 const nextId=()=>Math.max(0,...books.map(x=>x.id))+1;
@@ -1375,6 +1375,7 @@ function rangeControls(){
 document.addEventListener('change',e=>{const t=e.target;if(t.classList&&t.classList.contains('rg-sel')){ui.rg[t.dataset.f]=t.value;saveUi();makeShare('range');}});
 document.addEventListener('click',e=>{const t=e.target.closest('[data-act="rgq"]');if(t){rangeLast(+t.dataset.n);makeShare('range');}});
 async function renderPages(kind){
+  if(ui.lay==='recs'&&kind==='all')return renderRecs(ui.size);
   if(ui.lay==='count'&&kind==='all')return renderCountdown(ui.size);
   if(ui.lay==='photo'){const r=await renderPhoto(kind,ui.size);return r?[r]:[];}
   const y=ui.ly,m=kind==='month'?ui.lm:'';const split=(kind==='month'||kind==='all')?'one':(ui.split||'one');
@@ -1517,7 +1518,7 @@ function phControls(kind){
 function shareMsg(rs){const r=rs[0];const [w,hh,l]=SIZES[ui.size];const m=$('smsg');if(!m)return;
   if(r.photo){m.textContent=`${w} × ${hh} px, ${l} size. ${phImg?'':'Add a photo of yourself and the covers frame the middle. '}${r.extra?`Showing your top ${r.shown} of ${r.shown+r.extra} so the covers stay readable. `:''}Shuffle rearranges the covers.`;return;}
   m.textContent=`${w} × ${hh} px, ${l} size.${r.extra?` Showing ${r.shown} of ${r.shown+r.extra} books; pick a taller size or a slide per month to fit them all.`:''}${rs.length>1?` ${rs.length} images, swipe to see them all.`:''} You can also press and hold the image to save it.`;}
-async function phRefresh(){const rs=await renderPages(lastKind);const el=$('sprev');if(!el)return;if(!rs.length){el.innerHTML=`<div class="emptybox">No books match. Try 4★ and up or Everything.</div>`;lastImgs=[];lastImg=null;return;}freeImgs(rs);lastImg=rs[0];lastImgs=rs;paintPrev();shareMsg(rs);}
+async function phRefresh(){const rs=await renderPages(lastKind);const el=$('sprev');if(!el)return;if(!rs.length){el.innerHTML=`<div class="emptybox">${ui.lay==='recs'?'Add a pair to see your first slide.':'No books match. Try 4★ and up or Everything.'}</div>`;lastImgs=[];lastImg=null;return;}freeImgs(rs);lastImg=rs[0];lastImgs=rs;paintPrev();shareMsg(rs);}
 document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-act="lay"],[data-act="phf"],[data-act="phshuf"],[data-act="phclr"],[data-act="phtog"],[data-act="topn"],[data-act="cdt"],[data-act="cdc"]');if(!t)return;const a=t.dataset.act;
   if(a==='lay'){ui.lay=t.dataset.v;saveUi();makeShare(lastKind);}
   else if(a==='phtog'){const b=phAll(lastKind).find(x=>String(x.id)===t.dataset.id);if(!b)return;const k=String(b.id);if(phOff.has(k))phOff.delete(k);else phOff.add(k);t.setAttribute('aria-pressed',phInc(b));const c=$('phcount');if(c)c.textContent=phCount(lastKind);clearTimeout(phTimer);phTimer=setTimeout(phRefresh,300);}
@@ -1646,13 +1647,85 @@ async function renderCountdown(size){
   }
   return out;
 }
+/* ---------- "If you like this, read this" carousel: one pair per slide ---------- */
+const HAS_SMP=()=>typeof smp!=='undefined'&&!!smp;
+let rcBusy=false;
+function rcRead(){return books.filter(b=>b.st==='Read').sort((a,b)=>a.t.localeCompare(b.t));}
+const rcLabel=b=>`${b.t} (${author(b.a)})`;
+function rcPairs(){return (D.recs||[]).map(p=>[byId(p[0]),byId(p[1])]).filter(p=>p[0]&&p[1]);}
+function rcBlur(ctx,img,W,H){/* heavy blur that works everywhere: shrink in two steps, then stretch back */
+  const s=Math.max(W/img.width,H/img.height);const a=document.createElement('canvas');a.width=Math.max(8,Math.round(W/6));a.height=Math.max(8,Math.round(H/6));
+  const ax=a.getContext('2d');ax.imageSmoothingQuality='high';const iw=img.width*s/6,ih=img.height*s/6;ax.drawImage(img,(a.width-iw)/2,(a.height-ih)/2,iw,ih);
+  const m=document.createElement('canvas');m.width=Math.max(6,Math.round(W/20));m.height=Math.max(6,Math.round(H/20));const mx=m.getContext('2d');mx.imageSmoothingQuality='high';mx.drawImage(a,0,0,m.width,m.height);const b=document.createElement('canvas');b.width=Math.max(4,Math.round(W/54));b.height=Math.max(4,Math.round(H/54));const bx=b.getContext('2d');bx.imageSmoothingQuality='high';bx.drawImage(m,0,0,b.width,b.height);m.width=m.height=0;
+  ctx.save();ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(b,-W*0.04,-H*0.04,W*1.08,H*1.08);ctx.restore();a.width=a.height=b.width=b.height=0;}
+async function renderRecs(size){
+  C=Object.assign({},THEMES[ui.theme]||THEMES.night,FONTS[ui.font]||FONTS.modern);
+  try{await document.fonts.load(`600 100px ${C.df}`);}catch(e){}
+  const pairs=rcPairs();if(!pairs.length)return [];
+  const [W,H]=SIZES[size]||SIZES['4x5'];const SZ=SAFE[size];const TXT=ui.rct!=='off';
+  const L=SZ?SZ.l:60,Rm=SZ?SZ.r:60,T=SZ?SZ.t:56,B=SZ?SZ.b:56,cw=W-L-Rm,cx=L+cw/2;
+  const l1=(ui.rcl1??'If you like this:'),l2=(ui.rcl2??'Read this:');
+  const load=b=>typeof imgForCanvas==='function'?imgForCanvas(b):(b.c?loadImg(b.c):null);const out=[];
+  for(let k=0;k<pairs.length;k++){
+    const [a,b]=pairs[k];const [ia,ib]=await Promise.all([load(a),load(b)]);
+    const cv=document.createElement('canvas');cv.width=W;cv.height=H;const ctx=cv.getContext('2d');
+    ctx.fillStyle='#111';ctx.fillRect(0,0,W,H);const bg=phImg||ia||ib;if(bg)rcBlur(ctx,bg,W,H);ctx.fillStyle=phImg?'rgba(0,0,0,.28)':'rgba(0,0,0,.42)';ctx.fillRect(0,0,W,H);
+    /* sizes: two labels and two covers share the height */
+    let fs=TXT?(SZ?120:(size==='1x1'?78:100)):0;const gap=size==='1x1'?14:22;
+    if(TXT){for(;fs>40;fs-=2){ctx.font=`600 ${fs}px ${C.df}`;if(Math.max(ctx.measureText(l1).width,ctx.measureText(l2).width)<=cw)break;}}
+    const LM=TXT?fm(ctx,`600 ${fs}px ${C.df}`,'HdlkIy'):{a:0,d:0};const lh=TXT?LM.a+Math.max(LM.d,fs*0.2):0;
+    const avail=H-T-B-(TXT?2*lh+4*gap:gap);let ch=avail/2,cwv=ch/1.5;const maxW=TXT?cw*0.62:cw*0.7;if(cwv>maxW){cwv=maxW;ch=cwv*1.5;}
+    const used=(TXT?2*lh+4*gap:gap)+2*ch;let y=T+(H-T-B-used)/2;
+    const label=t=>{ctx.save();ctx.font=`600 ${fs}px ${C.df}`;ctx.textAlign='center';ctx.textBaseline='alphabetic';ctx.shadowColor='rgba(0,0,0,.45)';ctx.shadowBlur=fs*0.14;ctx.shadowOffsetY=fs*0.03;ctx.fillStyle='#FFFFFF';ctx.fillText(t,cx,y+LM.a);ctx.restore();y+=lh+gap;};
+    const keep=C.shadow;C.shadow='rgba(0,0,0,.55)';
+    if(TXT)label(l1);drawCover(ctx,a,ia,(W-cwv)/2,y,cwv,ch);y+=ch+gap;
+    if(TXT){y+=gap;label(l2);}drawCover(ctx,b,ib,(W-cwv)/2,y,cwv,ch);
+    C.shadow=keep;
+    out.push({cv,name:`if-you-like-${String(k+1).padStart(2,'0')}-${size}.png`,H});
+  }
+  return out;
+}
+function rcControls(){
+  const P=rcPairs(),R=rcRead();
+  return `<div class="field"><span class="lab">Pairs</span>${P.length?`<div class="rclist">${P.map(([a,b],i)=>`<div class="rcrow"><span class="rcn">${i+1}</span>${cover(a,'','.3rem')}<span class="rct"><b>${esc(a.t)}</b><span>then ${esc(b.t)}</span></span>${cover(b,'','.3rem')}<span class="rcbtns"><button class="xbtn" data-act="rcup" data-i="${i}" aria-label="Move up" ${i?'':'disabled'}>↑</button><button class="xbtn" data-act="rcdel" data-i="${i}" aria-label="Remove pair">×</button></span></div>`).join('')}</div>`:`<span class="hint">No pairs yet. Add one below${HAS_SMP()?' or let Claude suggest some':''}.</span>`}
+   <datalist id="rc-dl">${R.map(b=>`<option value="${esc(rcLabel(b))}">`).join('')}</datalist>
+   <div class="rcadd"><input class="inp" id="rc-a" list="rc-dl" placeholder="If you like…" autocomplete="off"><input class="inp" id="rc-b" list="rc-dl" placeholder="Read this…" autocomplete="off"><button class="btn gold small" data-act="rcadd">Add pair</button></div>
+   ${HAS_SMP()?`<button class="btn ghost small" data-act="rcsug" id="rc-sug" style="justify-self:start">Suggest pairs from my library</button>`:''}<span class="hint" id="rc-msg">Each pair is one slide. Post them together as a carousel.</span></div>
+   <div class="field"><span class="lab">Background</span><div class="phrow"><label class="btn ghost small phpick">${phImg?'Change photo':'Use a photo'}<input type="file" id="phFile" accept="image/*"></label>${phImg?'<button class="btn ghost small" data-act="phclr">Remove</button>':''}</div><span class="hint">Your photo, blurred. Without one, each slide uses a blur of the first cover.</span></div>
+   <div class="field"><span class="lab">Text on slides</span><div class="seg"><button data-act="rct" data-v="on" aria-pressed="${ui.rct!=='off'}">On</button><button data-act="rct" data-v="off" aria-pressed="${ui.rct==='off'}">Off</button></div></div>
+   ${ui.rct!=='off'?`<div class="row2"><div class="field"><span class="lab">Top line</span><input class="inp" id="rc-l1" maxlength="40" value="${esc(ui.rcl1??'If you like this:')}"></div><div class="field"><span class="lab">Middle line</span><input class="inp" id="rc-l2" maxlength="40" value="${esc(ui.rcl2??'Read this:')}"></div></div>`:''}`;
+}
+function rcFind(v){v=(v||'').trim().toLowerCase();if(!v)return null;const R=rcRead();return R.find(b=>rcLabel(b).toLowerCase()===v)||R.find(b=>b.t.toLowerCase()===v)||null;}
+async function rcSuggest(){
+  if(!HAS_SMP()||rcBusy)return;rcBusy=true;const btn=$('rc-sug');if(btn){btn.disabled=true;btn.textContent='Thinking…';}
+  const R=books.filter(b=>b.st==='Read'&&b.r!=='');const have=new Set((D.recs||[]).map(p=>p.join('-')));
+  const lines=R.map(b=>`${b.id} | ${b.t} | ${author(b.a)} | ${b.s==='Standalone'?'standalone':b.s+' #'+fmtN(b.n)} | ${b.r}`).join('\n');
+  const prompt=`You make "If you like this, read this" book pairings for a reader's social post. Both books in each pair must come from the reader's list below (id | title | author | series | their rating).
+Pick up to 8 strong pairings: "like" is a popular, widely known book; "read" is a book the reader rated 4.5 or higher that fans of the "like" book would enjoy and may not know. Use the first book of a series unless a later book makes more sense. Never pair two books from the same series or the same author. Do not reuse a "read" book.
+Return JSON only: {"pairs":[{"like":id,"read":id}]}
+${lines}`;
+  try{const o=await smp.json(prompt,{modelTier:'default'});const ok=new Set(R.map(b=>b.id));let n=0;D.recs=D.recs||[];
+    for(const p of (o&&o.pairs)||[]){const a=+p.like,b=+p.read;if(ok.has(a)&&ok.has(b)&&a!==b&&!have.has(a+'-'+b)){D.recs.push([a,b]);have.add(a+'-'+b);n++;}}
+    if(n){mark();}makeShare(lastKind).then(()=>{const m=$('rc-msg');if(m)m.textContent=n?`Added ${n} pair${n===1?'':'s'}. Remove any you don't want.`:'Claude did not find new pairs. Add your own below.';});
+  }catch(e){const m=$('rc-msg');if(m)m.textContent='Claude could not suggest pairs right now. Add your own below.';}
+  finally{rcBusy=false;}
+}
+document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-act="rcadd"],[data-act="rcdel"],[data-act="rcup"],[data-act="rcsug"],[data-act="rct"]');if(!t)return;const a=t.dataset.act;
+  if(a==='rcadd'){const x=rcFind($('rc-a').value),y=rcFind($('rc-b').value);const m=$('rc-msg');
+    if(!x||!y){if(m)m.textContent='Pick both books from the list. Start typing a title.';return;}if(x.id===y.id){if(m)m.textContent='Pick two different books.';return;}
+    D.recs=D.recs||[];D.recs.push([x.id,y.id]);mark();makeShare(lastKind);}
+  else if(a==='rcdel'){D.recs.splice(+t.dataset.i,1);mark();makeShare(lastKind);}
+  else if(a==='rcup'){const i=+t.dataset.i;if(i>0){[D.recs[i-1],D.recs[i]]=[D.recs[i],D.recs[i-1]];mark();makeShare(lastKind);}}
+  else if(a==='rcsug')rcSuggest();
+  else if(a==='rct'){ui.rct=t.dataset.v;saveUi();makeShare(lastKind);}});
+let rcTimer=null;document.addEventListener('input',e=>{const id=e.target.id;if(id!=='rc-l1'&&id!=='rc-l2')return;ui[id==='rc-l1'?'rcl1':'rcl2']=e.target.value;saveUi();clearTimeout(rcTimer);rcTimer=setTimeout(phRefresh,350);});
 async function makeShare(kind){
   kind=kind||(ui.ly==='all'?'all':ui.lm?'month':'year');if(kind==='range')rangeInit();lastKind=kind;if(!SIZES[ui.size])ui.size='4x5';
   const sz=Object.entries(SIZES).map(([k,[w,hh,l,rt]])=>`<button data-act="size" data-s="${k}" aria-pressed="${ui.size===k}"><span class="shape" style="width:${Math.round(22*w/hh)}px;height:22px"></span><b>${rt||k.replace('x',':')}</b><span>${l}</span></button>`).join('');
   openSheet(`<div class="sh-head" style="grid-template-columns:1fr auto"><div style="display:grid;gap:4px"><span class="kicker">Share</span><h3>${kind==='all'?(FM()==='s'?'All-time favorite series':'All-time favorites'):(kind==='range'?rangeInfo().head:kind==='month'?`${FULL[MI(ui.lm)]} ${ui.ly}`:ui.ly)+' roundup'}</h3></div>${X}</div>
-   ${kind==='all'?`<div class="field"><span class="lab">How many</span><div class="seg">${[5,10,20,50,'all'].map(v=>`<button data-act="topn" data-v="${v}" aria-pressed="${String(ui.topN||10)===String(v)}">${v==='all'?'All':'Top '+v}</button>`).join('')}</div></div>`:''}
+   ${kind==='all'&&ui.lay!=='recs'?`<div class="field"><span class="lab">How many</span><div class="seg">${[5,10,20,50,'all'].map(v=>`<button data-act="topn" data-v="${v}" aria-pressed="${String(ui.topN||10)===String(v)}">${v==='all'?'All':'Top '+v}</button>`).join('')}</div></div>`:''}
    <div class="seg" ${kind==='all'?'hidden':''}>${ui.lm?`<button data-act="kind" data-k="month" aria-pressed="${kind==='month'}">Month</button>`:''}<button data-act="kind" data-k="range" aria-pressed="${kind==='range'}">Pick months</button><button data-act="kind" data-k="year" aria-pressed="${kind==='year'}">Whole year</button></div>
-   <div class="seg"><button data-act="lay" data-v="grid" aria-pressed="${ui.lay!=='photo'&&!(ui.lay==='count'&&kind==='all')}">Roundup</button><button data-act="lay" data-v="photo" aria-pressed="${ui.lay==='photo'}">Photo collage</button>${kind==='all'?`<button data-act="lay" data-v="count" aria-pressed="${ui.lay==='count'}">Countdown</button>`:''}</div>${kind==='all'&&ui.lay==='count'?`<span class="hint">An intro slide, then one slide per pick from #${Math.min(topN(),19,favOrder().length)} down to #1. Post them together as a carousel.</span><div class="field"><span class="lab">Selfie</span><div class="phrow"><label class="btn ghost small phpick">${phImg?'Change photo':'Choose photo'}<input type="file" id="phFile" accept="image/*"></label>${phImg?'<button class="btn ghost small" data-act="phclr">Remove</button>':''}</div><span class="hint">Add a selfie for the lo-fi look: your photo on every slide with caption-style text. Leave it empty for the clean version.</span></div><div class="field"><span class="lab">Text on slides</span><div class="seg"><button data-act="cdt" data-v="on" aria-pressed="${ui.cdt!=='off'}">On</button><button data-act="cdt" data-v="off" aria-pressed="${ui.cdt==='off'}">Off</button></div><span class="hint">Turn it off to add your own text in Instagram or TikTok.</span></div>${FM()==='s'?`<div class="field"><span class="lab">Covers</span><div class="seg"><button data-act="cdc" data-v="one" aria-pressed="${ui.cdc!=='all'}">First book</button><button data-act="cdc" data-v="all" aria-pressed="${ui.cdc==='all'}">Whole series</button></div></div>`:''}`:''}
+   <div class="seg"><button data-act="lay" data-v="grid" aria-pressed="${ui.lay!=='photo'&&!((ui.lay==='count'||ui.lay==='recs')&&kind==='all')}">Roundup</button><button data-act="lay" data-v="photo" aria-pressed="${ui.lay==='photo'}">Collage</button>${kind==='all'?`<button data-act="lay" data-v="count" aria-pressed="${ui.lay==='count'}">Countdown</button><button data-act="lay" data-v="recs" aria-pressed="${ui.lay==='recs'}">If you like</button>`:''}</div>${kind==='all'&&ui.lay==='recs'?rcControls():''}${kind==='all'&&ui.lay==='count'?`<span class="hint">An intro slide, then one slide per pick from #${Math.min(topN(),19,favOrder().length)} down to #1. Post them together as a carousel.</span><div class="field"><span class="lab">Selfie</span><div class="phrow"><label class="btn ghost small phpick">${phImg?'Change photo':'Choose photo'}<input type="file" id="phFile" accept="image/*"></label>${phImg?'<button class="btn ghost small" data-act="phclr">Remove</button>':''}</div><span class="hint">Add a selfie for the lo-fi look: your photo on every slide with caption-style text. Leave it empty for the clean version.</span></div><div class="field"><span class="lab">Text on slides</span><div class="seg"><button data-act="cdt" data-v="on" aria-pressed="${ui.cdt!=='off'}">On</button><button data-act="cdt" data-v="off" aria-pressed="${ui.cdt==='off'}">Off</button></div><span class="hint">Turn it off to add your own text in Instagram or TikTok.</span></div>${FM()==='s'?`<div class="field"><span class="lab">Covers</span><div class="seg"><button data-act="cdc" data-v="one" aria-pressed="${ui.cdc!=='all'}">First book</button><button data-act="cdc" data-v="all" aria-pressed="${ui.cdc==='all'}">Whole series</button></div></div>`:''}`:''}
    ${kind==='range'?rangeControls():''}
    ${ui.lay==='photo'?phControls(kind):''}
    <div class="sizes" role="group" aria-label="Image size">${sz}</div>
@@ -1662,7 +1735,7 @@ async function makeShare(kind){
    <div class="field"><span class="lab">Preview</span><div class="seg"><button data-act="mock" data-v="0" aria-pressed="${!ui.mock}">Clean</button><button data-act="mock" data-v="1" aria-pressed="${!!ui.mock}">In the app</button></div><span class="hint" id="mockhint" ${ui.mock?'':'hidden'}>A generic app layout over your image so you can see what gets covered. Save image always saves the clean version.</span></div>
    <div class="share-prev" id="sprev"><div class="emptybox">Drawing your roundup…</div></div>
    <div class="actions"><button class="btn gold" data-act="saveimg">${navigator.canShare?'Share or save':'Save image'}</button></div><span class="hint" id="smsg"></span>`);
-  const rs=await renderPages(kind);if(!$('sprev'))return;if(!rs.length){$('sprev').innerHTML='<div class="emptybox">No books match. Try 4\u2605 and up or Everything.</div>';lastImgs=[];lastImg=null;return;}
+  const rs=await renderPages(kind);if(!$('sprev'))return;if(!rs.length){$('sprev').innerHTML=`<div class="emptybox">${ui.lay==='recs'?'Add a pair to see your first slide.':'No books match. Try 4\u2605 and up or Everything.'}</div>`;lastImgs=[];lastImg=null;return;}
   freeImgs(rs);lastImg=rs[0];lastImgs=rs;paintPrev();shareMsg(rs);
 }
 async function saveImg(){
