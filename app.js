@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.17.5';
+const VERSION='1.17.6';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -1542,10 +1542,8 @@ function cdKicker(ctx,text,x,y,W){let fs=26;const trk=5;for(;fs>14;fs--){ctx.fon
 /* the books that make up a series: numbered main books in order, or everything if none are numbered */
 function cdSeriesBooks(name){const all=(bySeries().get(name)||[]).slice().sort((a,b)=>(+a.n)-(+b.n));const main=all.filter(b=>Number.isInteger(+b.n)&&+b.n>0);return main.length?main:all;}
 const cdCount=n=>`${n} book${n===1?'':'s'}`;
-function cdSticker(ctx,b,img,cx,cy,w,h,rot){/* a cover with a white border, tilted a little */
-  ctx.save();ctx.translate(cx,cy);ctx.rotate(rot);const pad=Math.max(6,w*0.035);
-  ctx.shadowColor='rgba(0,0,0,.45)';ctx.shadowBlur=w*0.12;ctx.shadowOffsetY=w*0.04;ctx.fillStyle='#FFFFFF';rr(ctx,-w/2-pad,-h/2-pad,w+pad*2,h+pad*2,pad*0.9);ctx.fill();ctx.shadowColor='transparent';
-  const keep=C.shadow;C.shadow='rgba(0,0,0,0)';drawCover(ctx,b,img,-w/2,-h/2,w,h);C.shadow=keep;ctx.restore();}
+function cdSticker(ctx,b,img,cx,cy,w,h,rot){/* a cover tilted a little, lifted off the photo with a soft shadow */
+  ctx.save();ctx.translate(cx,cy);ctx.rotate(rot);const keep=C.shadow;C.shadow='rgba(0,0,0,.38)';drawCover(ctx,b,img,-w/2,-h/2,w,h);C.shadow=keep;ctx.restore();}
 /* lay out one or more covers inside a box: biggest even grid that fits, last row centered */
 function cdGrid(ctx,items,box,sticker,seed,maxW){
   const n=items.length;const gap=box.w*(sticker?0.06:0.035);let best=null;
