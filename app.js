@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.14.1';
+const VERSION='1.15.0';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -1375,6 +1375,7 @@ function rangeControls(){
 document.addEventListener('change',e=>{const t=e.target;if(t.classList&&t.classList.contains('rg-sel')){ui.rg[t.dataset.f]=t.value;saveUi();makeShare('range');}});
 document.addEventListener('click',e=>{const t=e.target.closest('[data-act="rgq"]');if(t){rangeLast(+t.dataset.n);makeShare('range');}});
 async function renderPages(kind){
+  if(ui.lay==='count'&&kind==='all')return renderCountdown(ui.size);
   if(ui.lay==='photo'){const r=await renderPhoto(kind,ui.size);return r?[r]:[];}
   const y=ui.ly,m=kind==='month'?ui.lm:'';const split=(kind==='month'||kind==='all')?'one':(ui.split||'one');
   if(split==='one'){const r=await render(kind,y,m,ui.size);return r?[r]:[];}
@@ -1515,7 +1516,7 @@ function phControls(kind){
 }
 function shareMsg(rs){const r=rs[0];const [w,hh,l]=SIZES[ui.size];const m=$('smsg');if(!m)return;
   if(r.photo){m.textContent=`${w} × ${hh} px, ${l} size. ${phImg?'':'Add a photo of yourself and the covers frame the middle. '}${r.extra?`Showing your top ${r.shown} of ${r.shown+r.extra} so the covers stay readable. `:''}Shuffle rearranges the covers.`;return;}
-  m.textContent=`${w} × ${hh} px, Instagram ${l.toLowerCase()} size.${r.extra?` Showing ${r.shown} of ${r.shown+r.extra} books; pick a taller size or a slide per month to fit them all.`:''}${rs.length>1?` ${rs.length} images, swipe to see them all.`:''} You can also press and hold the image to save it.`;}
+  m.textContent=`${w} × ${hh} px, ${l} size.${r.extra?` Showing ${r.shown} of ${r.shown+r.extra} books; pick a taller size or a slide per month to fit them all.`:''}${rs.length>1?` ${rs.length} images, swipe to see them all.`:''} You can also press and hold the image to save it.`;}
 async function phRefresh(){const rs=await renderPages(lastKind);const el=$('sprev');if(!el)return;if(!rs.length){el.innerHTML=`<div class="emptybox">No books match. Try 4★ and up or Everything.</div>`;lastImgs=[];lastImg=null;return;}freeImgs(rs);lastImg=rs[0];lastImgs=rs;paintPrev();shareMsg(rs);}
 document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-act="lay"],[data-act="phf"],[data-act="phshuf"],[data-act="phclr"],[data-act="phtog"],[data-act="topn"]');if(!t)return;const a=t.dataset.act;
   if(a==='lay'){ui.lay=t.dataset.v;saveUi();makeShare(lastKind);}
@@ -1526,13 +1527,75 @@ document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest
   else if(a==='phclr'){if(phImg&&phImg.getContext){phImg.width=phImg.height=0;}phImg=null;makeShare(lastKind);}});
 document.addEventListener('change',e=>{if(e.target.id!=='phFile')return;const f=e.target.files&&e.target.files[0];if(!f)return;const u=URL.createObjectURL(f);const i=new Image();i.onload=()=>{const sc=Math.min(1,2160/Math.max(i.naturalWidth,i.naturalHeight));const c=document.createElement('canvas');c.width=Math.round(i.naturalWidth*sc);c.height=Math.round(i.naturalHeight*sc);const x=c.getContext('2d');x.imageSmoothingQuality='high';x.drawImage(i,0,0,c.width,c.height);URL.revokeObjectURL(u);if(phImg&&phImg.getContext){phImg.width=phImg.height=0;}phImg=c;makeShare(lastKind);};i.onerror=()=>{const m=$('smsg');if(m)m.textContent='That photo could not be opened. Try a JPEG or PNG.';};i.src=u;});
 document.addEventListener('input',e=>{if(e.target.id!=='phT')return;const v=e.target.value;phT=v===phAuto(lastKind)?null:v;clearTimeout(phTimer);phTimer=setTimeout(phRefresh,350);});
+/* ---------- countdown carousel: one slide per pick, counting down to #1 ---------- */
+function cdBg(ctx,W,H,img){
+  if(C.grad){const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,C.bg2);g.addColorStop(1,C.bg);ctx.fillStyle=g;}else ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+  if(img){/* soft wash of the cover's colors: shrink it to a few pixels, then stretch it back */
+    const t=document.createElement('canvas');t.width=12;t.height=18;const tx=t.getContext('2d');tx.drawImage(img,0,0,12,18);
+    ctx.save();ctx.globalAlpha=0.55;ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(t,-W*0.1,-H*0.1,W*1.2,H*1.2);ctx.restore();
+    ctx.save();ctx.globalAlpha=0.62;ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);ctx.restore();t.width=t.height=0;}
+  if(C.glow){const g=ctx.createRadialGradient(W*0.85,-80,10,W*0.85,-80,W*0.9);g.addColorStop(0,C.glow);g.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);}
+}
+function cdKicker(ctx,text,x,y,W){let fs=26;const trk=5;for(;fs>14;fs--){ctx.font=`800 ${fs}px ${C.bf}`;let w=0;for(const ch of text)w+=ctx.measureText(ch).width+trk;if(w<=W)break;}ctx.fillStyle=C.accent;ctx.textAlign='left';ctx.textBaseline='alphabetic';let cx=x;for(const ch of text){ctx.fillText(ch,cx,y);cx+=ctx.measureText(ch).width+trk;}return fs;}
+async function renderCountdown(size){
+  C=Object.assign({},THEMES[ui.theme]||THEMES.night,FONTS[ui.font]||FONTS.modern);
+  try{await Promise.all([`800 120px ${C.df}`,`700 32px ${C.bf}`,`800 30px ${C.bf}`].map(f=>document.fonts.load(f)));}catch(e){}
+  const S=FM()==='s',all=favOrder(),N=Math.min(all.length,topN(),19);if(!N)return [];
+  const list=all.slice(0,N);const word=S?'series':'books';
+  const [W,H]=SIZES[size]||SIZES['4x5'];const SZ=SAFE[size];
+  const L=SZ?SZ.l:72,Rm=SZ?SZ.r:72,T=SZ?SZ.t:70,B=SZ?SZ.b:70,cw=W-L-Rm;
+  const kick=`MY TOP ${N} ${S?'SERIES':'BOOKS'} OF ALL TIME`;const out=[];
+  const imgs=await Promise.all(list.map(b=>typeof imgForCanvas==='function'?imgForCanvas(b.cb||b):(b.c?loadImg(b.c):null)));
+  /* intro slide */
+  {const cv=document.createElement('canvas');cv.width=W;cv.height=H;const ctx=cv.getContext('2d');cdBg(ctx,W,H,null);
+    cdKicker(ctx,'COUNTDOWN',L,T+26,cw);
+    const title=`My top ${N} ${word} of all time`;let fs=SZ?150:(size==='1x1'?118:140),ls;
+    for(;fs>60;fs-=4){ctx.font=`800 ${fs}px ${C.df}`;ls=wrap(ctx,title,cw,4);if(ls.length<=4&&title.split(/\s+/).every(w=>ctx.measureText(w).width<=cw))break;}
+    ctx.font=`800 ${fs}px ${C.df}`;ls=wrap(ctx,title,cw,4);const M=fm(ctx,ctx.font,'HdlbkI0123');const lh=fs*1.02;
+    let y=T+26+48+M.a;ctx.fillStyle=C.ink;ls.forEach((l,i)=>ctx.fillText(l,L-3,y+i*lh));y+=(ls.length-1)*lh;
+    /* three face-down cards */
+    const top=y+70,bot=H-B-90,avail=bot-top;const ch=Math.min(avail*0.86,(cw/2.45)*1.5),cwd=ch/1.5;const cx=W/2;
+    [[-0.13,-cwd*0.62],[0.13,cwd*0.62],[0,0]].forEach(([rot,dx],k)=>{ctx.save();ctx.translate(cx+dx,top+avail/2+(k<2?ch*0.04:0));ctx.rotate(rot);
+      const x=-cwd/2,yy=-ch/2,rad=cwd*0.04;ctx.shadowColor=C.shadow;ctx.shadowBlur=cwd*0.14;ctx.shadowOffsetY=cwd*0.05;rr(ctx,x,yy,cwd,ch,rad);ctx.fillStyle=C.bg2;ctx.fill();ctx.shadowColor='transparent';
+      ctx.strokeStyle=C.line;ctx.lineWidth=3;rr(ctx,x,yy,cwd,ch,rad);ctx.stroke();
+      ctx.fillStyle=k===2?C.accent:C.faint;ctx.textAlign='center';ctx.textBaseline='middle';ctx.font=`800 ${Math.round(cwd*0.5)}px ${C.df}`;ctx.fillText('?',0,0);ctx.restore();});
+    ctx.fillStyle=C.muted;ctx.textAlign='center';ctx.textBaseline='alphabetic';ctx.font=`700 ${size==='1x1'?28:32}px ${C.bf}`;ctx.fillText('Swipe to count down  →',W/2,H-B-24);ctx.textAlign='left';
+    out.push({cv,name:`countdown-${S?'series':'books'}-00-intro-${size}.png`,H});}
+  /* one slide per pick, from #N down to #1 */
+  for(let i=N-1;i>=0;i--){
+    const b=list[i],img=imgs[i],rank=i+1;const cv=document.createElement('canvas');cv.width=W;cv.height=H;const ctx=cv.getContext('2d');cdBg(ctx,W,H,img);
+    cdKicker(ctx,kick,L,T+26,cw);
+    /* big rank */
+    const rf=SZ?230:(size==='1x1'?150:200);ctx.font=`800 ${rf}px ${C.df}`;const RM=fm(ctx,ctx.font,'0123456789');
+    const numY=T+26+30+RM.a;ctx.fillStyle=C.accent;ctx.textAlign='left';ctx.fillText(String(rank),L-6,numY);
+    const nw=ctx.measureText(String(rank)).width;ctx.font=`800 ${Math.round(rf*0.24)}px ${C.bf}`;ctx.fillStyle=C.muted;ctx.fillText(`OF ${N}`,L+nw+18,numY);
+    /* text block at the bottom, sized first so the cover gets what is left */
+    let tf=SZ?76:(size==='1x1'?54:66);let tls;for(;tf>34;tf-=2){ctx.font=`800 ${tf}px ${C.df}`;tls=wrap(ctx,b.t,cw,2);if(tls.length<=2&&String(b.t).split(/\s+/).every(w=>ctx.measureText(w).width<=cw))break;}
+    ctx.font=`800 ${tf}px ${C.df}`;tls=wrap(ctx,b.t,cw,2);const TMm=fm(ctx,ctx.font,'HdlbkI');const TDd=fm(ctx,ctx.font,'gjpqy').d;
+    const sub=S?`${author(b.a)}  ·  ${b.read===b.total?`all ${b.total} read`:`${b.read} of ${b.total} read`}`:(b.s==='Standalone'?author(b.a):`${author(b.a)}  ·  ${b.s} ${fmtN(b.n)}`);
+    const sf=SZ?32:(size==='1x1'?24:28);const st=SZ?40:(size==='1x1'?30:36);
+    const blockH=TMm.a+(tls.length-1)*tf*1.04+TDd+18+sf+22+(b.r!==''?st:0);
+    const textTop=H-B-blockH;
+    /* cover */
+    const cTop=numY+40,cBot=textTop-44;let chh=Math.max(120,cBot-cTop);let cwv=chh/1.5;if(cwv>cw*0.78){cwv=cw*0.78;chh=cwv*1.5;}
+    const cx=(W-cwv)/2,cy=cTop+Math.max(0,(cBot-cTop-chh)/2);drawCover(ctx,b,img,cx,cy,cwv,chh);
+    /* title, author, rating */
+    let y=textTop+TMm.a;ctx.fillStyle=C.ink;ctx.textAlign='center';ctx.font=`800 ${tf}px ${C.df}`;tls.forEach((l,k)=>ctx.fillText(l,W/2,y+k*tf*1.04));
+    y+=(tls.length-1)*tf*1.04+TDd+18+sf;ctx.font=`700 ${sf}px ${C.bf}`;ctx.fillStyle=C.muted;ctx.fillText(wrap(ctx,sub,cw,1)[0]||'',W/2,y);
+    if(b.r!==''){const rs=S?`${rateStr(b.r)} avg`:rateStr(b.r);ctx.font=`800 ${Math.round(st*0.82)}px ${C.bf}`;const tw=ctx.measureText(rs).width;const sw=5*st+4*st*0.16;const x0=(W-(sw+st*0.5+tw))/2;const ry=y+22;
+      drawStars(ctx,x0,ry,st,+b.r);ctx.fillStyle=C.star;ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(rs,x0+sw+st*0.5,ry+st/2+1);ctx.textBaseline='alphabetic';}
+    ctx.textAlign='left';
+    out.push({cv,name:`countdown-${S?'series':'books'}-${String(N-i).padStart(2,'0')}-no${rank}-${size}.png`,H});
+  }
+  return out;
+}
 async function makeShare(kind){
   kind=kind||(ui.ly==='all'?'all':ui.lm?'month':'year');if(kind==='range')rangeInit();lastKind=kind;if(!SIZES[ui.size])ui.size='4x5';
   const sz=Object.entries(SIZES).map(([k,[w,hh,l,rt]])=>`<button data-act="size" data-s="${k}" aria-pressed="${ui.size===k}"><span class="shape" style="width:${Math.round(22*w/hh)}px;height:22px"></span><b>${rt||k.replace('x',':')}</b><span>${l}</span></button>`).join('');
   openSheet(`<div class="sh-head" style="grid-template-columns:1fr auto"><div style="display:grid;gap:4px"><span class="kicker">Share</span><h3>${kind==='all'?(FM()==='s'?'All-time favorite series':'All-time favorites'):(kind==='range'?rangeInfo().head:kind==='month'?`${FULL[MI(ui.lm)]} ${ui.ly}`:ui.ly)+' roundup'}</h3></div>${X}</div>
    ${kind==='all'?`<div class="field"><span class="lab">How many</span><div class="seg">${[5,10,20,50,'all'].map(v=>`<button data-act="topn" data-v="${v}" aria-pressed="${String(ui.topN||10)===String(v)}">${v==='all'?'All':'Top '+v}</button>`).join('')}</div></div>`:''}
    <div class="seg" ${kind==='all'?'hidden':''}>${ui.lm?`<button data-act="kind" data-k="month" aria-pressed="${kind==='month'}">Month</button>`:''}<button data-act="kind" data-k="range" aria-pressed="${kind==='range'}">Pick months</button><button data-act="kind" data-k="year" aria-pressed="${kind==='year'}">Whole year</button></div>
-   <div class="seg"><button data-act="lay" data-v="grid" aria-pressed="${ui.lay!=='photo'}">Roundup</button><button data-act="lay" data-v="photo" aria-pressed="${ui.lay==='photo'}">Photo collage</button></div>
+   <div class="seg"><button data-act="lay" data-v="grid" aria-pressed="${ui.lay!=='photo'&&!(ui.lay==='count'&&kind==='all')}">Roundup</button><button data-act="lay" data-v="photo" aria-pressed="${ui.lay==='photo'}">Photo collage</button>${kind==='all'?`<button data-act="lay" data-v="count" aria-pressed="${ui.lay==='count'}">Countdown</button>`:''}</div>${kind==='all'&&ui.lay==='count'?`<span class="hint">An intro slide, then one slide per pick from #${Math.min(topN(),19,favOrder().length)} down to #1. Post them together as a carousel.</span>`:''}
    ${kind==='range'?rangeControls():''}
    ${ui.lay==='photo'?phControls(kind):''}
    <div class="sizes" role="group" aria-label="Image size">${sz}</div>
