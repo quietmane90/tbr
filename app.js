@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.17.0';
+const VERSION='1.17.1';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -46,7 +46,7 @@ async function askPersist(){try{if(navigator.storage&&navigator.storage.persist&
 const ui={tab:'home',ly:'',lm:undefined,st:'Unread',prio:'',q:'',open:{},size:'4x5',hideInstall:false};
 try{const s=JSON.parse(localStorage.getItem('tbr-ui')||'null');if(s)Object.assign(ui,s,{q:''});}catch(e){}
 const hsh=(location.hash||'').slice(1);if(['home','log','library'].includes(hsh))ui.tab=hsh;
-function saveUi(){try{localStorage.setItem('tbr-ui',JSON.stringify({tab:ui.tab,ly:ui.ly,lm:ui.lm,st:ui.st,prio:ui.prio,open:ui.open,size:ui.size,rg:ui.rg,split:ui.split,theme:ui.theme,font:ui.font,mock:ui.mock,lay:ui.lay,phf:ui.phf,topN:ui.topN,fm:ui.fm,cdt:ui.cdt,cdc:ui.cdc,rct:ui.rct,rcl1:ui.rcl1,rcl2:ui.rcl2,sort:ui.sort,hideInstall:ui.hideInstall}))}catch(e){}}
+function saveUi(){try{localStorage.setItem('tbr-ui',JSON.stringify({tab:ui.tab,ly:ui.ly,lm:ui.lm,st:ui.st,prio:ui.prio,open:ui.open,size:ui.size,rg:ui.rg,split:ui.split,theme:ui.theme,font:ui.font,mock:ui.mock,lay:ui.lay,phf:ui.phf,topN:ui.topN,fm:ui.fm,cdt:ui.cdt,cdc:ui.cdc,rct:ui.rct,genst:ui.genst,rcl1:ui.rcl1,rcl2:ui.rcl2,sort:ui.sort,hideInstall:ui.hideInstall}))}catch(e){}}
 
 const byId=id=>books.find(b=>b.id===id);
 const nextId=()=>Math.max(0,...books.map(x=>x.id))+1;
@@ -1526,8 +1526,8 @@ document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest
   else if(a==='topn'){ui.topN=t.dataset.v==='all'?'all':+t.dataset.v;phOff.clear();saveUi();makeShare('all');}
   else if(a==='cdt'||a==='cdc'){ui[a]=t.dataset.v;saveUi();makeShare(lastKind);}
   else if(a==='phshuf'){phSeed=2+Math.floor(Math.random()*1e6);phRefresh();}
-  else if(a==='phclr'){if(phImg&&phImg.getContext){phImg.width=phImg.height=0;}phImg=null;makeShare(lastKind);}});
-document.addEventListener('change',e=>{if(e.target.id!=='phFile')return;const f=e.target.files&&e.target.files[0];if(!f)return;const u=URL.createObjectURL(f);const i=new Image();i.onload=()=>{const sc=Math.min(1,2160/Math.max(i.naturalWidth,i.naturalHeight));const c=document.createElement('canvas');c.width=Math.round(i.naturalWidth*sc);c.height=Math.round(i.naturalHeight*sc);const x=c.getContext('2d');x.imageSmoothingQuality='high';x.drawImage(i,0,0,c.width,c.height);URL.revokeObjectURL(u);if(phImg&&phImg.getContext){phImg.width=phImg.height=0;}phImg=c;makeShare(lastKind);};i.onerror=()=>{const m=$('smsg');if(m)m.textContent='That photo could not be opened. Try a JPEG or PNG.';};i.src=u;});
+  else if(a==='phclr'){if(phImg&&phImg.getContext){phImg.width=phImg.height=0;}phImg=null;phGen=null;makeShare(lastKind);}});
+document.addEventListener('change',e=>{if(e.target.id!=='phFile')return;const f=e.target.files&&e.target.files[0];if(!f)return;const u=URL.createObjectURL(f);const i=new Image();i.onload=()=>{const sc=Math.min(1,2160/Math.max(i.naturalWidth,i.naturalHeight));const c=document.createElement('canvas');c.width=Math.round(i.naturalWidth*sc);c.height=Math.round(i.naturalHeight*sc);const x=c.getContext('2d');x.imageSmoothingQuality='high';x.drawImage(i,0,0,c.width,c.height);URL.revokeObjectURL(u);if(phImg&&phImg.getContext){phImg.width=phImg.height=0;}phGen=null;phImg=c;makeShare(lastKind);};i.onerror=()=>{const m=$('smsg');if(m)m.textContent='That photo could not be opened. Try a JPEG or PNG.';};i.src=u;});
 document.addEventListener('input',e=>{if(e.target.id!=='phT')return;const v=e.target.value;phT=v===phAuto(lastKind)?null:v;clearTimeout(phTimer);phTimer=setTimeout(phRefresh,350);});
 /* ---------- countdown carousel: one slide per pick, counting down to #1 ---------- */
 function cdBg(ctx,W,H,img){
@@ -1647,6 +1647,44 @@ async function renderCountdown(size){
   }
   return out;
 }
+/* ---------- generated backgrounds: a bookshelf scene drawn on the device, made to be blurred ---------- */
+let phGen=null;
+const GEN_STYLES={warm:{name:'Warm library',wall:['#2A1A10','#1A0F08'],wood:'#5A3620',woodHi:'#7A4A2A',glow:'rgba(255,190,110,',spines:['#7A1F1F','#1F3A5F','#2F4F2F','#B8892B','#E8DCC0','#5A3A22','#1E5050','#2A2A2A','#8C4A2F','#3D2B56']},
+  dark:{name:'Dark academia',wall:['#15181A','#0A0B0C'],wood:'#2E2118',woodHi:'#4A3424',glow:'rgba(210,170,100,',spines:['#3B1414','#1A2738','#1E2E1E','#6E5A2A','#B9AD92','#2B1E14','#123232','#151515','#4E2A1C','#241A33']},
+  bright:{name:'Bright shelves',wall:['#EDE6DA','#D9CFBF'],wood:'#F4F0E8',woodHi:'#FFFFFF',glow:'rgba(255,240,210,',spines:['#C9514A','#3C6E9E','#6E9A6A','#E2B54B','#F2EDE2','#A57A55','#4F9C9A','#3A3A3A','#D9876A','#8A76B5']}};
+function genShelf(style,seed,W,H){
+  const S=GEN_STYLES[style]||GEN_STYLES.warm;const R=phRand(seed);const cv=document.createElement('canvas');cv.width=W;cv.height=H;const x=cv.getContext('2d');
+  const g=x.createLinearGradient(0,0,0,H);g.addColorStop(0,S.wall[0]);g.addColorStop(1,S.wall[1]);x.fillStyle=g;x.fillRect(0,0,W,H);
+  const shelfH=Math.round(H/(6+Math.floor(R()*2)));const plank=Math.round(shelfH*0.08);
+  for(let top=Math.round(-R()*shelfH*0.5);top<H;top+=shelfH){
+    const base=top+shelfH-plank;let px=-Math.round(R()*30);
+    while(px<W){
+      const r=R();if(r<0.05){px+=Math.round(20+R()*60);continue;}/* a gap now and then */
+      const w=Math.round(16+R()*38),h=Math.round(shelfH*(0.55+R()*0.33));const col=S.spines[Math.floor(R()*S.spines.length)];
+      const lean=R()<0.07?(R()<0.5?-1:1)*(0.08+R()*0.12):0;
+      x.save();x.translate(px+w/2,base);x.rotate(lean);
+      x.fillStyle=col;x.fillRect(-w/2,-h,w,h);
+      const sh=x.createLinearGradient(-w/2,0,w/2,0);sh.addColorStop(0,'rgba(0,0,0,.28)');sh.addColorStop(0.35,'rgba(255,255,255,.06)');sh.addColorStop(1,'rgba(0,0,0,.32)');x.fillStyle=sh;x.fillRect(-w/2,-h,w,h);
+      if(R()<0.7){x.fillStyle='rgba(215,180,100,.55)';const b1=-h*(0.12+R()*0.08);x.fillRect(-w/2+2,b1,w-4,Math.max(2,h*0.012));x.fillRect(-w/2+2,-h*0.82,w-4,Math.max(2,h*0.012));}
+      if(R()<0.5){x.fillStyle='rgba(255,255,255,.18)';x.fillRect(-w*0.18,-h*0.6,w*0.36,h*0.22);}
+      x.restore();px+=w+Math.round(R()*3);
+    }
+    x.fillStyle=S.wood;x.fillRect(0,base,W,plank);x.fillStyle=S.woodHi;x.fillRect(0,base,W,Math.max(2,plank*0.2));
+    x.fillStyle='rgba(0,0,0,.35)';x.fillRect(0,base+plank,W,Math.max(3,plank*0.5));
+  }
+  /* lamp glow and soft light spots, which turn into bokeh once blurred */
+  const lx=W*(0.15+R()*0.7),ly=H*(0.08+R()*0.3);const lg=x.createRadialGradient(lx,ly,10,lx,ly,W*0.9);lg.addColorStop(0,S.glow+'.55)');lg.addColorStop(0.5,S.glow+'.14)');lg.addColorStop(1,'rgba(0,0,0,0)');x.fillStyle=lg;x.fillRect(0,0,W,H);
+  for(let i=0;i<14;i++){const cx=R()*W,cy=R()*H,rr2=W*(0.02+R()*0.05);const bg2=x.createRadialGradient(cx,cy,0,cx,cy,rr2);bg2.addColorStop(0,S.glow+(0.25+R()*0.3)+')');bg2.addColorStop(1,'rgba(0,0,0,0)');x.fillStyle=bg2;x.beginPath();x.arc(cx,cy,rr2,0,Math.PI*2);x.fill();}
+  const vg=x.createRadialGradient(W/2,H/2,W*0.3,W/2,H/2,H*0.75);vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,style==='bright'?'rgba(0,0,0,.18)':'rgba(0,0,0,.55)');x.fillStyle=vg;x.fillRect(0,0,W,H);
+  return cv;
+}
+function genSet(style,seed){if(phImg&&phImg.getContext){phImg.width=phImg.height=0;}phGen={style,seed};phImg=genShelf(style,seed,1080,1920);}
+function genControls(){return `<button class="btn ghost small" data-act="gen">${phGen?'New one':'Generate one'}</button>`;}
+function genStyles(){return phGen?`<div class="seg">${Object.entries(GEN_STYLES).map(([k,s])=>`<button data-act="genst" data-v="${k}" aria-pressed="${phGen.style===k}">${s.name}</button>`).join('')}</div>`:'';}
+document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-act="gen"],[data-act="genst"]');if(!t)return;
+  if(t.dataset.act==='gen')genSet(phGen?phGen.style:(ui.genst||'warm'),2+Math.floor(Math.random()*1e6));
+  else{ui.genst=t.dataset.v;saveUi();genSet(t.dataset.v,phGen?phGen.seed:2+Math.floor(Math.random()*1e6));}
+  makeShare(lastKind);});
 /* ---------- "If you like this, read this" carousel: one pair per slide ---------- */
 const HAS_SMP=()=>typeof smp!=='undefined'&&!!smp;
 let rcBusy=false;
@@ -1691,7 +1729,7 @@ function rcControls(){
    <datalist id="rc-dl">${R.map(b=>`<option value="${esc(rcLabel(b))}">`).join('')}</datalist>
    <div class="rcadd"><input class="inp" id="rc-a" list="rc-dl" placeholder="If you like…" autocomplete="off"><input class="inp" id="rc-b" list="rc-dl" placeholder="Read this…" autocomplete="off"><button class="btn gold small" data-act="rcadd">Add pair</button></div>
    ${HAS_SMP()?`<button class="btn ghost small" data-act="rcsug" id="rc-sug" style="justify-self:start">Suggest pairs from my library</button>`:''}<span class="hint" id="rc-msg">Each pair is one slide. Post them together as a carousel.</span></div>
-   <div class="field"><span class="lab">Background</span><div class="phrow"><label class="btn ghost small phpick">${phImg?'Change photo':'Use a photo'}<input type="file" id="phFile" accept="image/*"></label>${phImg?'<button class="btn ghost small" data-act="phclr">Remove</button>':''}</div><span class="hint">Your photo, blurred. Without one, each slide uses a blur of the first cover.</span></div>
+   <div class="field"><span class="lab">Background</span><div class="phrow"><label class="btn ghost small phpick">${phImg&&!phGen?'Change photo':'Use a photo'}<input type="file" id="phFile" accept="image/*"></label>${genControls()}${phImg?'<button class="btn ghost small" data-act="phclr">Remove</button>':''}</div>${genStyles()}<span class="hint">Use your photo or generate a bookshelf scene. Either one gets blurred. With neither, each slide uses a blur of its first cover.</span></div>
    <div class="field"><span class="lab">Text on slides</span><div class="seg"><button data-act="rct" data-v="on" aria-pressed="${ui.rct!=='off'}">On</button><button data-act="rct" data-v="off" aria-pressed="${ui.rct==='off'}">Off</button></div></div>
    ${ui.rct!=='off'?`<div class="row2"><div class="field"><span class="lab">Top line</span><input class="inp" id="rc-l1" maxlength="40" value="${esc(ui.rcl1??'If you like this:')}"></div><div class="field"><span class="lab">Middle line</span><input class="inp" id="rc-l2" maxlength="40" value="${esc(ui.rcl2??'Read this:')}"></div></div>`:''}`;
 }
