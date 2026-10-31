@@ -1,7 +1,7 @@
 /* TBR: a reading tracker that lives on your phone. Data stays in this browser (IndexedDB). */
 (function(){
 'use strict';
-const VERSION='1.17.8';
+const VERSION='1.17.9';
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MI=m=>MONTHS.indexOf(m);
@@ -1711,7 +1711,8 @@ async function renderRecs(size){
   for(let k=0;k<pairs.length;k++){
     const [a,b]=pairs[k];const [ia,ib]=await Promise.all([load(a),load(b)]);
     const cv=document.createElement('canvas');cv.width=W;cv.height=H;const ctx=cv.getContext('2d');
-    ctx.fillStyle='#111';ctx.fillRect(0,0,W,H);const bg=phImg||ia||ib;if(bg)rcBlur(ctx,bg,W,H);ctx.fillStyle=phImg?'rgba(0,0,0,.28)':'rgba(0,0,0,.42)';ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#111';ctx.fillRect(0,0,W,H);if(phImg){/* your photo or the generated shelf, sharp, darkened so the covers stand out */const s=Math.max(W/phImg.width,H/phImg.height),iw=phImg.width*s,ih=phImg.height*s;ctx.imageSmoothingQuality='high';ctx.drawImage(phImg,(W-iw)/2,(H-ih)/2,iw,ih);ctx.fillStyle='rgba(0,0,0,.52)';ctx.fillRect(0,0,W,H);const vg=ctx.createRadialGradient(W/2,H/2,W*0.25,W/2,H/2,H*0.75);vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(0,0,0,.45)');ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);}
+    else{const bg=ia||ib;if(bg)rcBlur(ctx,bg,W,H);ctx.fillStyle='rgba(0,0,0,.42)';ctx.fillRect(0,0,W,H);}
     /* sizes: two labels and two covers share the height */
     let fs=TXT?(SZ?120:(size==='1x1'?78:100)):0;const gap=size==='1x1'?14:22;
     if(TXT){for(;fs>40;fs-=2){ctx.font=`600 ${fs}px ${C.df}`;if(Math.max(ctx.measureText(l1).width,ctx.measureText(l2).width)<=cw)break;}}
@@ -1733,7 +1734,7 @@ function rcControls(){
    <datalist id="rc-dl">${R.map(b=>`<option value="${esc(rcLabel(b))}">`).join('')}</datalist>
    <div class="rcadd"><input class="inp" id="rc-a" list="rc-dl" placeholder="If you like…" autocomplete="off"><input class="inp" id="rc-b" list="rc-dl" placeholder="Read this…" autocomplete="off"><button class="btn gold small" data-act="rcadd">Add pair</button></div>
    ${HAS_SMP()?`<div class="field" style="gap:6px"><span class="lab">How much better known "If you like" should be</span><div class="seg">${[['1','Any amount'],['1.5','1.5\u00d7'],['2','2\u00d7'],['3','3\u00d7']].map(([v,l])=>`<button data-act="rcgap" data-v="${v}" aria-pressed="${String(ui.rcgap||'1.5')===v}">${l}</button>`).join('')}</div><span class="hint">Measured by Goodreads ratings. 2\u00d7 means the first book has at least twice as many ratings.</span></div><button class="btn ghost small" data-act="rcsug" id="rc-sug" style="justify-self:start">Suggest pairs from my library</button>`:''}<span class="hint" id="rc-msg">Each pair is one slide. Post them together as a carousel.</span></div>
-   <div class="field"><span class="lab">Background</span><div class="phrow"><label class="btn ghost small phpick">${phImg&&!phGen?'Change photo':'Use a photo'}<input type="file" id="phFile" accept="image/*"></label>${genControls()}${phImg?'<button class="btn ghost small" data-act="phclr">Remove</button>':''}</div>${genStyles()}<span class="hint">Use your photo or generate a bookshelf scene. Either one gets blurred. With neither, each slide uses a blur of its first cover.</span></div>
+   <div class="field"><span class="lab">Background</span><div class="phrow"><label class="btn ghost small phpick">${phImg&&!phGen?'Change photo':'Use a photo'}<input type="file" id="phFile" accept="image/*"></label>${genControls()}${phImg?'<button class="btn ghost small" data-act="phclr">Remove</button>':''}</div>${genStyles()}<span class="hint">Use your photo or generate a bookshelf scene. It's darkened so the covers pop. With neither, each slide uses a blur of its first cover.</span></div>
    <div class="field"><span class="lab">Text on slides</span><div class="seg"><button data-act="rct" data-v="on" aria-pressed="${ui.rct!=='off'}">On</button><button data-act="rct" data-v="off" aria-pressed="${ui.rct==='off'}">Off</button></div></div>
    ${ui.rct!=='off'?`<div class="row2"><div class="field"><span class="lab">Top line</span><input class="inp" id="rc-l1" maxlength="40" value="${esc(ui.rcl1??'If you like this:')}"></div><div class="field"><span class="lab">Middle line</span><input class="inp" id="rc-l2" maxlength="40" value="${esc(ui.rcl2??'Read this:')}"></div></div>`:''}`;
 }
